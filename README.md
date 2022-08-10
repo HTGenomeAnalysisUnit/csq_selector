@@ -30,7 +30,7 @@ And it uses the following nim packages
 If you have nimble installed you can compile easily with:
 
 ```bash
-git clone 
+git clone https://github.com/HTGenomeAnalysisUnit/csq_selector.git
 cd csq_selector
 nimble build 
 ```
@@ -53,7 +53,7 @@ Additionally, you can specify a list of transcripts of interest using `-t, --tra
 
 ### Min impact filter
 
-It is possible to filter by consequence level using `--min_impact`. In this case you should specify the minimum accepted consequence (like missense). The default order of known consequences can be found using `./csq_selector --show_csq_order`
+It is possible to filter by consequence level using `--min_impact`. In this case you should specify the minimum accepted consequence (like missense). The default order of known consequences can be found using `./csq_selector show_csq_order`
 
 You can specify a new order providing a text file with a list of consequences, one per line. This custon file can be specified using `SELECTOR_CSQ_ORDER` environment variable or passing it to `--impact_order` option. Note that the latter take precedence in case both are specified.
 
@@ -65,7 +65,7 @@ You can add special cutoff values in this list in the form of string ending in `
 
 You can provide transcripts expression data using `--exp_data` option. This data should be a tab-separated file with header. Column 1 must contain transcript ids and column 2 gene ids. Then you should have 1 column per tissue/condition. A file with median TPM expression from GTeX v8 is provided in the repository in exp_data folder.
 
-Then you can use `--tissues` to specify tissues of interest. Here you can specify a comma-separated list or a file with one value per line. Values must correspond to column headers in the expression file.
+Then you can use `--tissues` to specify tissues of interest. Here you can specify a comma-separated list or a file with one value per line. Values must correspond to column headers in the expression file. Use quotes if column names contains spaces, like `--tissue "Whole blood,Brain cortex"`.
 
 The min expression threshold is set using `--min_exp`. Only consequences affecting a transcript with expression above this threshold in at least on of the specified tissues are kept.
 
@@ -73,7 +73,7 @@ The min expression threshold is set using `--min_exp`. Only consequences affecti
 
 The output format can be set using `--out_format` option. You can use either `tsv` or `vcf` (default).
 
-When using `tsv` format, the output is a tab-separated file with the following columns: CHROM,POS,ID,REF,ALT,FILTER,GENE_ID,GENE_SYMBOL,TRANSCRIPT,CONSEQUENCE + additional columns containig CSQ fields specified by `--csq-column`. Note that variants with no remaining consequences after filtering are omitted.
+When using `tsv` format, the output is a tab-separated file with the following columns: CHROM,POS,ID,REF,ALT,FILTER,GENE_ID,GENE_SYMBOL,TRANSCRIPT,CONSEQUENCE + additional columns containig CSQ fields specified by `--csq-column`. Note that variants with no remaining consequences after filtering are omitted and the output will contain one consequence per line (so the number of output lines can be larger than the number of input variants)
 
 When using `vcf` format, the output is a standard VCF file. All variants are omitted in this case and the CSQ field is removed if no consequence is left after filtering for a variant.
 

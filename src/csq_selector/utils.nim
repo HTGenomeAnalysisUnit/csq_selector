@@ -30,7 +30,6 @@ proc progress_counter* (n:int, interval: var int, t0: var float): (bool, string)
     result = (false, "")
 
     case n
-        of 20000: interval = 10000
         of 50000: interval = 25000
         of 150000: interval = 50000
         of 500000: interval = 100000

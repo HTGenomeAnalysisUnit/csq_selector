@@ -10,5 +10,5 @@ skipDirs      = @["test"]
 
 # Dependencies
 
-requires "nim >= 1.4.8", "hts >= 0.3.21", "zip >= 0.3.1"
+requires "nim >= 1.4.8", "hts >= 0.3.21", "zip >= 0.3.1", "argparse >= 3.0.0"
 
