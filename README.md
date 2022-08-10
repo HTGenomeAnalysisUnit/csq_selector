@@ -26,6 +26,7 @@ And it uses the following nim packages
 
 - hts-nim >= 0.3.21
 - zip >= 0.3.1
+- argparse >= 3.0.0
 
 If you have nimble installed you can compile easily with:
 
