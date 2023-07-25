@@ -39,7 +39,7 @@ proc `$`*(x: seq[Impact]): string =
     csqs.add($i)
   result = csqs.join("; ")
 
-#Split consequences from ANN/CSQ/BCSQ and returns a list of csq strings
+#Split consequences from ANN/CSQ/BCSQ and returns a list of csq as Impact object
 proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impact_order: TableRef[string, int], tx_vers_re: Regex, max_impact: string = "", allowed_tx: HashSet[string], ranked_exp: HashSet[string]): (int, seq[Impact]) =
   var max_impact_order = 99
   if max_impact != "":

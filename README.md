@@ -76,7 +76,7 @@ The output format can be set using `--out_format` option. You can use either `ts
 
 When using `tsv` format, the output is a tab-separated file with the following columns: CHROM,POS,ID,REF,ALT,FILTER,GENE_ID,GENE_SYMBOL,TRANSCRIPT,CONSEQUENCE + additional columns containig CSQ fields specified by `--csq-column`. Note that variants with no remaining consequences after filtering are omitted and the output will contain one consequence per line (so the number of output lines can be larger than the number of input variants)
 
-When using `vcf` format, the output is a standard VCF file. All variants are omitted in this case and the CSQ field is removed if no consequence is left after filtering for a variant.
+When using `vcf` format, the output is a standard VCF file. All variants are emitted in this case and the CSQ field is removed if no consequence is left after filtering for a variant.
 
 When not output file is specified (`--out`), the output is written to stdout.
 
