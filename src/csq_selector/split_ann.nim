@@ -241,7 +241,7 @@ proc get_csq_string*(csqs: seq[Impact], gene_fields: GeneIndexes, format: string
 
 # Given a seq of impacts for a variant, update a gene_set with variants corresponding to each gene
 proc update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: seq[Impact], useid: bool = false) =
-  var var_id = [$v.CHROM, $v.POS, $v.ID, v.REF, v.ALT[0]].join("_")
+  var var_id = [$v.CHROM, $v.POS, v.REF, v.ALT[0]].join("_")
   if useid: 
     var_id = $v.ID
   

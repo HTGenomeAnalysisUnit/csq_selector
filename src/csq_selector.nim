@@ -38,7 +38,7 @@ proc write_new_var(wrt:FileStream, v:Variant, csq: string): bool {.inline.} =
 # Given a seq of impacts for a variant, generate a seq of strings representing variant anno in regenie format
 proc write_anno_string(wrt:FileStream, v: Variant, csqs: seq[string], useid: bool = false): int =
   result = 0
-  var var_id = [$v.CHROM, $v.POS, $v.ID, v.REF, v.ALT[0]].join(":")
+  var var_id = [$v.CHROM, $v.POS, v.REF, v.ALT[0]].join(":")
   if useid: 
     var_id = $v.ID
 
@@ -49,10 +49,7 @@ proc write_anno_string(wrt:FileStream, v: Variant, csqs: seq[string], useid: boo
     except:
         discard
 
-# TODO: Future functions to write set file and annot file as per regenie format
-# proc write_new_set(wrt:FileStream, v:Variant, csq: string): bool {.inline.} =
-#     discard
-
+# Convenience iterator to read variants from a VCF with or without regions
 iterator readvar(v: VCF, regions: seq[string]): Variant =
     if regions.len == 0:
         for variant in v: yield variant
@@ -140,16 +137,29 @@ proc main* () =
 
     # Load scores from JSON if provided
     var scores_json: JsonNode
-    var scores_keys: seq[string]
+    var scores_csq_keys: seq[string]
+    var scores_fields: seq[string]
     if opts.scores != "":
         if opts.out_format == "vcf":
             log("WARNING", "--scores can only be used with rarevar_set output and will be ignored")
         else:
             scores_json = parseFile(opts.scores)
             for k in scores_json.fields.keys:
-                scores_keys.add(k)
+                scores_csq_keys.add(k)
+                let csq_scores = scores_json[k]
+                for s in csq_scores.keys:
+                    scores_fields.add(s)
+            log("INFO", fmt"Loaded scores for {$scores_csq_keys} consequences")
+            log("INFO", fmt"Looking for the following score fields {$scores_fields}")
     
-    # Process variants
+    # Set output streams
+    var out_vcf:VCF
+    var out_tsv:FileStream
+    var out_setlist:FileStream
+    var out_annot:FileStream
+    var gene_set: Table[string,GeneSet]
+
+    # Set vars and open input VCF
     log("INFO", "Variant processing started")
     var
         start_time = cpuTime()
@@ -171,13 +181,16 @@ proc main* () =
     let csq_columns = (if opts.csq_column != "": opts.csq_column.split(",") else: @[])
     vcf.set_csq_fields_idx(opts.csq_field, gene_fields, csq_columns)
 
-    # Set header
-    var out_vcf:VCF
-    var out_tsv:FileStream
-    var out_setlist:FileStream
-    var out_annot:FileStream
-    var gene_set: Table[string,GeneSet]
-    
+    # If we have scores are set, check they are defined in the header
+    var desc: string
+    for s in scores_fields:
+        try:
+            desc = vcf.header.get(s, BCF_HEADER_TYPE.BCF_HL_INFO)["Description"]
+        except:
+            log("FATAL", fmt"Could not find {s} in VCF header")
+            quit "", QuitFailure
+
+    # Open needed output streams and set headers
     case opts.out_format:
         of "vcf":
             var out_header = vcf.header
@@ -208,7 +221,7 @@ proc main* () =
             out_setlist = newFileStream(fmt"{opts.out}.setlist", fmWrite)
             out_annot = newFileStream(fmt"{opts.out}.annot", fmWrite)
 
-    #Process variants
+    # Process variants
     for v in vcf.readvar(regions):
         n = n + 1
         var (dolog, log_msg) = progress_counter(n, interval, t0)
@@ -250,20 +263,23 @@ proc main* () =
                     stdout.writeLine(v.var2string(x))
         elif opts.out_format == "rarevar_set":
             written_vars = written_vars + out_annot.write_anno_string(v, selected_csqs, opts.use_vcf_id)
-            # update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: seq[Impact], useid: bool = false) 
             gene_set.update_gene_set(v, impacts, opts.use_vcf_id)
 
     close(vcf)
+
+    # Close output streams and write setlist file if needed
     if opts.out != "":
         case opts.out_format:
             of "vcf": close(out_vcf) 
             of "tsv": close(out_tsv)
             of "rarevar_set":
+                log("INFO", fmt"Writing setlist file for {gene_set.len} genes")
                 for line in gene_set.make_set_string:
                     out_setlist.writeLine(line)
                 close(out_setlist)
                 close(out_annot)
 
+    # Final log
     if n_noimpact > 0:
         log("WARN", fmt"{n_noimpact} variants had no impact after filters")
     if n_nocsqfield > 0:
