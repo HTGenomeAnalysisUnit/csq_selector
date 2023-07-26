@@ -5,13 +5,24 @@ Small utility to manipulate gene consequences annotations from snpEff, VEP or bc
 Given a VCF file, it allows to filter consequences according to:
 
 - min consequence (like missense, etc)
-- min level of expression of transcript across specified conditions/tissues (expression values are loaded from a tab-separated file)
+- transcripts with a min level of expression across specified conditions/tissues (expression values are loaded from a tab-separated file)
 - a list of transcripts of interest
 
-Additionally, for each variant one can decide to output only the most severe consequence
-or the most severe consequences per gene (in case a variant affect more than one gene).
+Additionally, for each variant one can decide to output only the most severe consequence or the most severe consequences per gene (in case a variant affect more than one gene).
 
-Output is writted to file or stdout in TSV or VCF format. When TSV is select a list of additional CSQ columns to extract can be specified and variant with no remaining consequences after filtering are omitted.
+The user can combine these filtering strategy to achieve precise control on the output consequences (see filter logic below). 
+
+The tool can output variants in either VCF, TSV or regenie set variant format, thus allowing for high flexibility in the downstream analysis.
+
+## Filter logic
+
+Filters are applied in this order: 
+
+1. consequences are filtered based on allowed transcripts (intersection of the custom transcripts list and transcripts from expression matrix)
+2. remaining consequences are filtered retaining only those more severe than the specified min_impact
+3. the most severe filter is applied (if specified)
+
+In this way it is possible to accomodate sophisticated scenarios like getting only the most severe consequence across transcripts expressed in the tissue of interest, but only is consequence is at least exonic.
 
 ## Installation
 
@@ -46,11 +57,45 @@ A minimal example to select only the most severe consequence for each variant:
 ./csq_selector --vcf test/GRCh37_small_test.vcf.gz --out_format vcf --out test/out.vcf.gz --most_severe
 ```
 
-### Set transcripts or regions of interest
+You can use the following to see the default consequences order:
 
-Additionally, you can specify a list of transcripts of interest using `-t, --transcripts` or a list of regions using `-r, --regions`. Regions are in the format chr:start-stop and both options take either a comma-separated list or a file with one value per line.
+```bash
+./csq_selector show_csq_order
+```
 
-**NB.** Transcript version is removed from both transcripts list and annotations from the VCF file to ensure they can match. This is done by regex `\.[0-9]+$`
+Complete list of options:
+
+```bash
+Usage:
+  CSQ Selector [options] 
+
+Options:
+  -h, --help
+  -i, --vcf=VCF              path to VCF/BCF
+  -o, --out=OUT              Output file
+  -O, --out_format=OUT_FORMAT
+                             Output format Possible values: [vcf, tsv, rarevar_set] (default: vcf)
+  -c, --csq_field=CSQ_FIELD  INFO field containing the gene name and impact. Usually CSQ, ANN or BCSQ (default: ANN)
+  --csq-column=CSQ_COLUMN    CSQ sub-field(s) to extract (in addition to gene, impact, transcript) when output is TSV. A comma-separated list of sub-fields can be provided
+  -e, --exp_data=EXP_DATA    path to expression file. Tab-separated table of transcript expression across conditions
+  -n, --min_exp=MIN_EXP      Min expression value for a transcript to be considered expressed
+  --tissues=TISSUES          List of tissues to select in the expression file. Comma-separated list or file with 1 tissue per line.
+  -r, --region=REGION        Specify genomic region for processing. Format is chr[:start-end]. Comma-separated list of regions or file with 1 region per line.
+  -t, --transcripts=TRANSCRIPTS
+                             list of trancsripts to restrict consequences output. Comma-separated list or file with 1 tissue per line.
+  --mode=MODE                Mode to apply most severe filter. Across all annotations or by gene Possible values: [all, by_gene] (default: all)
+  -m, --most_severe          Only output the most severe consequence for each variant
+  --keep_old_ann             Keep original annotation fields in the output VCF under ORIGINAL_ANN tag
+  --min_impact=MIN_IMPACT    Impact threshold from the consequences order
+  --impact_order=IMPACT_ORDER
+                             ordering of impacts to override the default. See default using show_csq_order
+  -s, --scores=SCORES        A JSON file describing scores schema for variant consequences
+  --use_vcf_id               Use the ID field from the VCF as the variant ID in the rarevar_set output
+```
+
+### Most severe filter
+
+When the `-m`, `--most_severe` flag is active, only the most severe consequence for each variant will be selected. Using the `--mode` option it is possible to control if this filter is applied across all consequences or by gene. In the latter case, if a variant has consequences on more than one gene, the most severe consequence for each gene is selected.
 
 ### Min impact filter
 
@@ -62,6 +107,12 @@ You can add special cutoff values in this list in the form of string ending in `
 
 **NB.** Note that if `_variant` is present this is removed before matching so for example both `missense_variant` and `missense` should work.
 
+### Set transcripts or regions of interest
+
+User can specify a list of transcripts of interest using `-t, --transcripts` or a list of regions using `-r, --regions`. Regions are in the format chr:start-stop and both options take either a comma-separated list or a file with one value per line.
+
+**NB.** Transcript version is removed from both transcripts list and annotations from the VCF file to ensure they can match. This is done by regex `\.[0-9]+$`
+
 ### Expression filter
 
 You can provide transcripts expression data using `--exp_data` option. This data should be a tab-separated file with header. Column 1 must contain transcript ids and column 2 gene ids. Then you should have 1 column per tissue/condition. A file with median TPM expression from GTeX v8 is provided in the repository in exp_data folder.
@@ -70,15 +121,55 @@ Then you can use `--tissues` to specify tissues of interest. Here you can specif
 
 The min expression threshold is set using `--min_exp`. Only consequences affecting a transcript with expression above this threshold in at least on of the specified tissues are kept.
 
-## Outputs
+### Use scores for rarevar_set output
 
-The output format can be set using `--out_format` option. You can use either `tsv` or `vcf` (default).
+When the output format is set to `rarevar_set` it is possible to configure value thresholds based on annotations in the INFO field to refine variants categories. You can pass a JSON file to the `--scores` option to configure value thresholds to be applied for a specific impact and the variant annotation for that impact will reflect the number of scores thresholds that are passed. For example instead of just `missense`, the annotation could be `missense-1` or `missense-2` if the variant has a score above threshold for one or two values, respectively.
 
-When using `tsv` format, the output is a tab-separated file with the following columns: CHROM,POS,ID,REF,ALT,FILTER,GENE_ID,GENE_SYMBOL,TRANSCRIPT,CONSEQUENCE + additional columns containig CSQ fields specified by `--csq-column`. Note that variants with no remaining consequences after filtering are omitted and the output will contain one consequence per line (so the number of output lines can be larger than the number of input variants)
+Actually, any kind of operation is accepted on values (`>, >=, <, <=, ==, !=`), but the logic can only be applied to numeric values. 
 
-When using `vcf` format, the output is a standard VCF file. All variants are emitted in this case and the CSQ field is removed if no consequence is left after filtering for a variant.
+The JSON file should have the following structure:
 
-When not output file is specified (`--out`), the output is written to stdout.
+```json
+{
+	"impact": {
+		"score_name": {
+			"value": 10,
+			"operator": ">="
+		}
+	}
+}
+```
+
+- `impact` is the consequence level (like missense) and must match what exepected in the impact order
+- `score_name` is the name of the score to be considered. This must match the name of the INFO field in the VCF file
+- `value` is the numeric threshold value
+- `operator` is the operator to be used to compare the value in the VCF file with the threshold (any of `>, >=, <, <=, ==, !=`)
+
+## Output formats
+
+The output format is controlled by the `-O`, `--out_format` option. An output file/prefix can be specified with `--out`
+
+When `--out` is not specified, the output is writted to stdout when using `tsv` or `vcf` format, while for `rarevar_set` format an output prefix is mandatory. 
+
+### VCF
+
+In VCF format, the tools write a standard VCF, updating the original ANN/BCSQ/CSQ field with the selected consequences. If no consequence is left after filtering, the field is removed. The old annotations can be kept in a separate field named ORIGINAL_ANN using `--keep_old_ann` option.
+
+### TSV
+
+When TSV is select the tool will write a tab-separated text file with header. By default the following fields are written in the output: CHROM,POS, ID, REF, ALT, FILTER, GENE_ID, GENE_SYMBOL, TRANSCRIPT, CONSEQUENCE.
+
+In TSV format, the user can use the `--csq-column` option to provide a comma-separated list of additional fields that need to be extracted from the consequence string adn these will be included as additional columns. These names must match those described in the header description for the ANN/BCSQ/CSQ field. 
+
+If no consequence is left after filtering, the line is omitted.
+
+### Rarevar set
+
+This output format generate 2 output files that can be used when performing rare variants analysis with [regenie](https://rgcgithub.github.io/regenie/). The first file (`.annot`) contains variants impact annotations (variant id, gene id, impact), while the second file (`.setlist`) contains the list of variants associated to each gene (gene id, chrom, position, variant id list).
+
+By default the variant id created as `CHROM:POS:REF:ALT`, but one can set the `--use_vcf_id` flag to use the ID reported in the VCF instead.
+
+The format of these files is described in more detail in the [regenie docs](https://rgcgithub.github.io/regenie/options/#annotation-input-files).
 
 ## Credits
 
