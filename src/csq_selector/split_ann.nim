@@ -1,5 +1,6 @@
 # Split ANN from SnpEff and select most severe CSQ
 import hts
+import json
 import strformat
 import strutils
 import system
@@ -29,6 +30,12 @@ type Impact* = object
   impact: string
   order: int
   csq_string: string
+  pass_scores: int
+
+type Gene_set* = object 
+  chrom: string
+  position: int64
+  vars: seq[string]
 
 proc `$`*(x: Impact): string =
   result = fmt"[gene_id: {x.gene_id}, gene_symbol: {x.gene_symbol}, transcript: {x.transcript}, impact: {x.impact}, order: {x.order}]"
@@ -39,8 +46,28 @@ proc `$`*(x: seq[Impact]): string =
     csqs.add($i)
   result = csqs.join("; ")
 
+proc compare_values(x: float32, y: float, operator: string): bool =
+  case operator:
+    of "<": result = x < y
+    of "<=": result = x <= y
+    of ">": result = x > y
+    of ">=": result = x >= y
+    of "==": result = x == y
+    of "!=": result = x != y
+    else: raise newException(ValueError, fmt"unknown operator: {operator}")
+
+proc compare_values(x: int32, y: int, operator: string): bool =
+  case operator:
+    of "<": result = x < y
+    of "<=": result = x <= y
+    of ">": result = x > y
+    of ">=": result = x >= y
+    of "==": result = x == y
+    of "!=": result = x != y
+    else: raise newException(ValueError, fmt"unknown operator: {operator}")
+
 #Split consequences from ANN/CSQ/BCSQ and returns a list of csq as Impact object
-proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impact_order: TableRef[string, int], tx_vers_re: Regex, max_impact: string = "", allowed_tx: HashSet[string], ranked_exp: HashSet[string]): (int, seq[Impact]) =
+proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impact_order: TableRef[string, int], tx_vers_re: Regex, max_impact: string = "", allowed_tx: HashSet[string], ranked_exp: HashSet[string], scores: JsonNode): (int, seq[Impact]) =
   var max_impact_order = 99
   if max_impact != "":
     max_impact_order = impact_order[max_impact]
@@ -76,6 +103,26 @@ proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impa
 
         if val > max_impact_order: continue
 
+        var n_pass_scores = 0
+        try:
+          var csq_scores = scores[impact]
+          for score_tag in csq_scores.keys:
+            let score_obj =  csq_scores[score_tag]
+            if score_obj["value"].kind == JFloat:
+              let score_threshold = score_obj["value"].getFloat()
+              var score_value: seq[float32] 
+              if v.info.get(score_tag, score_value) == Status.OK:
+                if compare_values(score_value[0], score_threshold, score_obj{"operator"}.getStr(">")):
+                  n_pass_scores += 1
+            elif score_obj["value"].kind == JInt:
+              let score_threshold = score_obj["value"].getInt()
+              var score_value: seq[int32] 
+              if v.info.get(score_tag, score_value) == Status.OK:
+                if compare_values(score_value[0], score_threshold, score_obj{"operator"}.getStr(">")):
+                  n_pass_scores += 1
+        except:
+          discard
+
         x.gene_id = toks[gene_fields.gene_id].cleanTxVersion(tx_vers_re)
         x.gene_symbol = toks[gene_fields.gene_symbol]
         x.transcript = tx
@@ -83,6 +130,7 @@ proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impa
         x.impact = impact
         x.order = val
         x.csq_string = tr
+        x.pass_scores = n_pass_scores
         
         parsed_impacts.add(x)
 
@@ -183,8 +231,32 @@ proc get_csq_string*(csqs: seq[Impact], gene_fields: GeneIndexes, format: string
         result.add(line.join("\t"))
       of "vcf":
         result.add(x.csq_string)
+      of "rarevar_set":
+        if x.pass_scores == 0:
+          result.add([x.gene_id, x.impact].join("\t"))
+        else:
+          result.add([x.gene_id, fmt"{x.impact}-{x.pass_scores}"].join("\t"))
       else:
         raise newException(ValueError, fmt"unknown output format: {format}")
+
+# Given a seq of impacts for a variant, update a gene_set with variants corresponding to each gene
+proc update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: seq[Impact], useid: bool = false) =
+  var var_id = [$v.CHROM, $v.POS, $v.ID, v.REF, v.ALT[0]].join("_")
+  if useid: 
+    var_id = $v.ID
+  
+  for c in csqs:
+    var gene_values = gene_set.getOrDefault(c.gene_id)
+    gene_values.chrom = $v.CHROM
+    if gene_values.position > v.POS or gene_values.position == 0:
+      gene_values.position = v.POS
+    gene_values.vars.add(var_id)
+    gene_set[c.gene_id] = gene_values
+
+# Given a gene_set generate a seq of strings representing gene sets in regenie format
+proc make_set_string*(gene_set: Table[string, Gene_set]): seq[string] =
+  for gene_id, gene_values in gene_set.pairs():
+    result.add([gene_id, gene_values.chrom, $gene_values.position, gene_values.vars.join(",")].join("\t"))
 
 #Given a seq of csq strings and an impact order returns the highest severity consequence
 proc get_highest_impact(csqs: seq[Impact], gene_fields:GeneIndexes): Impact =

@@ -6,6 +6,7 @@ import tables
 import os
 import streams
 import re
+import json
 import std/sets
 import csq_selector/impact_order
 import csq_selector/utils
@@ -33,6 +34,24 @@ proc write_new_var(wrt:FileStream, v:Variant, csq: string): bool {.inline.} =
         result = true
     except:
         result = false
+
+# Given a seq of impacts for a variant, generate a seq of strings representing variant anno in regenie format
+proc write_anno_string(wrt:FileStream, v: Variant, csqs: seq[string], useid: bool = false): int =
+  result = 0
+  var var_id = [$v.CHROM, $v.POS, $v.ID, v.REF, v.ALT[0]].join(":")
+  if useid: 
+    var_id = $v.ID
+
+  for c in csqs:
+    try:
+        wrt.writeLine([var_id,c].join("\t"))
+        result += 1
+    except:
+        discard
+
+# TODO: Future functions to write set file and annot file as per regenie format
+# proc write_new_set(wrt:FileStream, v:Variant, csq: string): bool {.inline.} =
+#     discard
 
 iterator readvar(v: VCF, regions: seq[string]): Variant =
     if regions.len == 0:
@@ -67,8 +86,12 @@ proc main* () =
             log("FATAL", "No filters active for a VCF output, nothing to do")
             quit "", QuitFailure
 
+    # Check we have an output file if format is rarevar_set
+    if opts.out_format == "rarevar_set" and opts.out == "":
+        log("FATAL", "Output file must be specified for rarevar_set output")
+        quit "", QuitFailure
+
     # Set consequences order
-    
     if opts.impact_order != "":
         if not fileExists(opts.impact_order):
             log("FATAL", fmt"Impact order file {opts.impact_order} does not exist")
@@ -115,6 +138,17 @@ proc main* () =
             log("FATAL", fmt"No transcripts ranked above the minimum expression threshold ({min_exp})")
             quit "", QuitFailure
 
+    # Load scores from JSON if provided
+    var scores_json: JsonNode
+    var scores_keys: seq[string]
+    if opts.scores != "":
+        if opts.out_format == "vcf":
+            log("WARNING", "--scores can only be used with rarevar_set output and will be ignored")
+        else:
+            scores_json = parseFile(opts.scores)
+            for k in scores_json.fields.keys:
+                scores_keys.add(k)
+    
     # Process variants
     log("INFO", "Variant processing started")
     var
@@ -140,39 +174,46 @@ proc main* () =
     # Set header
     var out_vcf:VCF
     var out_tsv:FileStream
+    var out_setlist:FileStream
+    var out_annot:FileStream
+    var gene_set: Table[string,GeneSet]
     
-    if opts.out_format == "vcf":
-        var out_header = vcf.header
-        if opts.keep_old_ann:
-            if out_header.add_info("ORIGINAL_ANN", "1","String", "Original annotation before CSQ_SELECTOR") != Status.OK:
-                log("FATAL", "Could not add ORIGINAL_ANN to VCF header")
-                quit "", QuitFailure
-        if opts.out != "":           
-            doAssert(open(out_vcf, opts.out, mode="w"))
-            out_vcf.header = out_header
-            doAssert(out_vcf.write_header())
-        else:
-            stdout.writeLine($out_header)
-    else:
-        var header = TSV_HEADER
-        for c in gene_fields.columns.keys():
-            header &= &"\t{c}"  
-        if opts.out != "":
-            out_tsv = newFileStream(opts.out, fmWrite)
-            if isNil(out_tsv):
-                log("FATAL", "Could not open output file " & opts.out)
-                quit "", QuitFailure
+    case opts.out_format:
+        of "vcf":
+            var out_header = vcf.header
+            if opts.keep_old_ann:
+                if out_header.add_info("ORIGINAL_ANN", "1","String", "Original annotation before CSQ_SELECTOR") != Status.OK:
+                    log("FATAL", "Could not add ORIGINAL_ANN to VCF header")
+                    quit "", QuitFailure
+            if opts.out != "":           
+                doAssert(open(out_vcf, opts.out, mode="w"))
+                out_vcf.header = out_header
+                doAssert(out_vcf.write_header())
             else:
-                out_tsv.writeLine(header)
-        else:
-            stdout.writeLine(header)
+                stdout.writeLine($out_header)
+        of "tsv":
+            var header = TSV_HEADER
+            for c in gene_fields.columns.keys():
+                header &= &"\t{c}"  
+            if opts.out != "":
+                out_tsv = newFileStream(opts.out, fmWrite)
+                if isNil(out_tsv):
+                    log("FATAL", "Could not open output file " & opts.out)
+                    quit "", QuitFailure
+                else:
+                    out_tsv.writeLine(header)
+            else:
+                stdout.writeLine(header)
+        of "rarevar_set":
+            out_setlist = newFileStream(fmt"{opts.out}.setlist", fmWrite)
+            out_annot = newFileStream(fmt"{opts.out}.annot", fmWrite)
 
     #Process variants
     for v in vcf.readvar(regions):
         n = n + 1
         var (dolog, log_msg) = progress_counter(n, interval, t0)
         if dolog: log("INFO", log_msg)
-        var (csqfield_missing, impacts) = v.split_csqs(opts.csq_field, gene_fields, impact_order, TX_VERS_RE, min_impact, allowed_transcripts, ranked_exp)
+        var (csqfield_missing, impacts) = v.split_csqs(opts.csq_field, gene_fields, impact_order, TX_VERS_RE, min_impact, allowed_transcripts, ranked_exp, scores_json)
         n_nocsqfield += csqfield_missing
         
         if impacts.len == 0: 
@@ -200,19 +241,28 @@ proc main* () =
             else:
                 written_vars += 1
                 stdout.writeLine(v.tostring)
-        else:
+        elif opts.out_format == "tsv":
             for x in selected_csqs:
                 if opts.out != "":
                     if out_tsv.write_new_var(v, x): written_vars += 1
                 else:
                     written_vars += 1
                     stdout.writeLine(v.var2string(x))
+        elif opts.out_format == "rarevar_set":
+            written_vars = written_vars + out_annot.write_anno_string(v, selected_csqs, opts.use_vcf_id)
+            # update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: seq[Impact], useid: bool = false) 
+            gene_set.update_gene_set(v, impacts, opts.use_vcf_id)
 
     close(vcf)
     if opts.out != "":
         case opts.out_format:
             of "vcf": close(out_vcf) 
             of "tsv": close(out_tsv)
+            of "rarevar_set":
+                for line in gene_set.make_set_string:
+                    out_setlist.writeLine(line)
+                close(out_setlist)
+                close(out_annot)
 
     if n_noimpact > 0:
         log("WARN", fmt"{n_noimpact} variants had no impact after filters")

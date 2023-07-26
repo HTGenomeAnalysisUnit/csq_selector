@@ -6,7 +6,7 @@ var p = newParser("CSQ Selector"):
     help("Select gene consequences from snpEff, VEP or bcftools annotations in VCF file")
     option("-i", "--vcf", help="path to VCF/BCF", required=true)
     option("-o", "--out", help="Output file")
-    option("-O", "--out_format", help="Output format", default = some("vcf"), choices = @["vcf", "tsv"])
+    option("-O", "--out_format", help="Output format", default = some("vcf"), choices = @["vcf", "tsv", "rarevar_set"])
     option("-c", "--csq_field", help="INFO field containing the gene name and impact. Usually CSQ, ANN or BCSQ", default = some("ANN"))
     option("--csq-column", help="CSQ sub-field(s) to extract (in addition to gene, impact, transcript) when output is TSV. A comma-separated list of sub-fields can be provided")
     option("-e", "--exp_data", help="path to expression file. Tab-separated table of transcript expression across conditions")
@@ -19,6 +19,8 @@ var p = newParser("CSQ Selector"):
     flag("--keep_old_ann", help="Keep original annotation fields in the output VCF under ORIGINAL_ANN tag")
     option("--min_impact", help="Impact threshold from the consequences order")
     option("--impact_order", help="ordering of impacts to override the default. See default using show_csq_order")
+    option("-s", "--scores", help="A JSON file describing scores schema for variant consequences")
+    flag("--use_vcf_id", help="Use the ID field from the VCF as the variant ID in the rarevar_set output")
         
 proc parseCmdLine*(): ref =
     try:
@@ -61,3 +63,4 @@ proc logArgs*(opts: ref) {.discardable.} =
         active_filters.add("min_impact")
         log("ARG", fmt"Min impact: {opts.min_impact}")
     log("ARG", fmt"Active filters: {active_filters}")
+    log("ARG", fmt"Scores: {opts.scores}")
