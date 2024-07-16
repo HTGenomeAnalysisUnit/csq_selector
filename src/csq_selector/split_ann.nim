@@ -108,18 +108,16 @@ proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impa
           var csq_scores = scores[impact]
           for score_tag in csq_scores.keys:
             let score_obj =  csq_scores[score_tag]
-            if score_obj["value"].kind == JFloat:
+            if score_obj["value"].kind == JFloat or score_obj["value"].kind == JInt:
               let score_threshold = score_obj["value"].getFloat()
               var score_value: seq[float32] 
               if v.info.get(score_tag, score_value) == Status.OK:
                 if compare_values(score_value[0], score_threshold, score_obj{"operator"}.getStr(">")):
                   n_pass_scores += 1
-            elif score_obj["value"].kind == JInt:
-              let score_threshold = score_obj["value"].getInt()
-              var score_value: seq[int32] 
-              if v.info.get(score_tag, score_value) == Status.OK:
-                if compare_values(score_value[0], score_threshold, score_obj{"operator"}.getStr(">")):
-                  n_pass_scores += 1
+            elif score_obj["value"].kind == JBool:
+              let flag_value = score_obj["value"].getBool()
+              if info.has_flag(score_tag) == flag_value:
+                n_pass_scores += 1
         except:
           discard
 
