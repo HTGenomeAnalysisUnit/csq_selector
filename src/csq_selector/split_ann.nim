@@ -7,6 +7,7 @@ import system
 import tables
 import re
 import std/sets
+from math import floorMod
 from ./utils import log, cleanTxVersion
 from ./tx_expression import Ranked_exp
 # import sequtils
@@ -253,8 +254,15 @@ proc update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: s
 
 # Given a gene_set generate a seq of strings representing gene sets in regenie format
 proc make_set_string*(gene_set: Table[string, Gene_set]): seq[string] =
+  var n = 0
+  let interval = 1000
   for gene_id, gene_values in gene_set.pairs():
+    n += 1
+    if n < 10:
+      log("INFO", fmt"{gene_values.vars.len} variants in setlist for gene {gene_id}. Reported for the first 10 genes")
     result.add([gene_id, gene_values.chrom, $gene_values.position, gene_values.vars.join(",")].join("\t"))
+    if floorMod(n, interval) == 0:
+      log("INFO", fmt"{n} gene sets processed")
 
 #Given a seq of csq strings and an impact order returns the highest severity consequence
 proc get_highest_impact(csqs: seq[Impact], gene_fields:GeneIndexes): Impact =
