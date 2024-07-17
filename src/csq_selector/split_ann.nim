@@ -117,7 +117,7 @@ proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impa
                   n_pass_scores += 1
             elif score_obj["value"].kind == JBool:
               let flag_value = score_obj["value"].getBool()
-              if info.has_flag(score_tag) == flag_value:
+              if v.info.has_flag(score_tag) == flag_value:
                 n_pass_scores += 1
         except:
           discard
