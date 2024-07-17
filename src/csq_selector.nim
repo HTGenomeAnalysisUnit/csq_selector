@@ -14,7 +14,7 @@ import csq_selector/tx_expression
 import csq_selector/split_ann
 import csq_selector/arg_parse
 
-const VERSION = "0.2"
+const VERSION = "0.3"
 const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE"
 
 proc write_new_var(wrt:VCF, v:Variant): bool {.inline.} =
