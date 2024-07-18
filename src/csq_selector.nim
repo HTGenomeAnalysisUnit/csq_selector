@@ -7,7 +7,6 @@ import os
 import streams
 import re
 import json
-from math import floorMod
 import std/sets
 import csq_selector/impact_order
 import csq_selector/utils
@@ -48,7 +47,7 @@ proc write_anno_string(wrt:FileStream, v: Variant, csqs: seq[string], useid: boo
         wrt.writeLine([var_id,c].join("\t"))
         result += 1
     except:
-        discard
+        log("WARN", fmt"Could not write annotation string for variant {var_id} and consequence {c}")
 
 # Convenience iterator to read variants from a VCF with or without regions
 iterator readvar(v: VCF, regions: seq[string]): Variant =
