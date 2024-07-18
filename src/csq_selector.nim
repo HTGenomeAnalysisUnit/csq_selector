@@ -7,6 +7,7 @@ import os
 import streams
 import re
 import json
+from math import floorMod
 import std/sets
 import csq_selector/impact_order
 import csq_selector/utils
