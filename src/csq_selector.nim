@@ -275,12 +275,11 @@ proc main* () =
             of "rarevar_set":
                 log("INFO", fmt"Writing setlist file for {gene_set.len} genes")
                 var n_genes = 0
-                let interval = 1000
                 for gene_id, gene_values in gene_set.pairs():
                     n_genes += 1
-                    if n < 10:
+                    if n_genes < 10:
                         log("INFO", fmt"{gene_values.vars.len} variants in setlist for gene {gene_id}. Reported for the first 10 genes")
-                    if floorMod(n, interval) == 0:
+                    if floorMod(n_genes, 1000) == 0:
                         log("INFO", fmt"{n_genes} gene sets processed")
                     out_setlist.writeLine([gene_id, gene_values.chrom, $gene_values.position, gene_values.vars.join(",")].join("\t"))
                 close(out_setlist)

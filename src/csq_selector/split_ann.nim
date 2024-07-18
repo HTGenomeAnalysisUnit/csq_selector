@@ -7,7 +7,6 @@ import system
 import tables
 import re
 import std/sets
-from math import floorMod
 from ./utils import log, cleanTxVersion
 from ./tx_expression import Ranked_exp
 # import sequtils
