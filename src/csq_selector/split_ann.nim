@@ -35,7 +35,7 @@ type Impact* = object
 type Gene_set* = object 
   chrom: string
   position: int64
-  vars: seq[string]
+  vars*: seq[string]
 
 proc `$`*(x: Impact): string =
   result = fmt"[gene_id: {x.gene_id}, gene_symbol: {x.gene_symbol}, transcript: {x.transcript}, impact: {x.impact}, order: {x.order}]"
