@@ -33,8 +33,8 @@ type Impact* = object
   pass_scores: int
 
 type Gene_set* = object 
-  chrom: string
-  position: int64
+  chrom*: string
+  position*: int64
   vars*: seq[string]
 
 proc `$`*(x: Impact): string =
