@@ -283,7 +283,7 @@ proc main* () =
                         log("INFO", fmt"{gene_values.vars.len} variants in setlist for gene {gene_id}. Reported for the first 10 genes")
                     if floorMod(n_genes, 1000) == 0:
                         log("INFO", fmt"{n_genes} gene sets processed")
-                    out_setlist.writeLine(set_string)
+                    #out_setlist.writeLine(set_string)
                 close(out_setlist)
                 close(out_annot)
 
