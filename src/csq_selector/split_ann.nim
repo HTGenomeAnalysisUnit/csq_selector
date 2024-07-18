@@ -253,7 +253,7 @@ proc update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: s
     gene_set[c.gene_id] = gene_values
 
 # Given a gene_set generate a seq of strings representing gene sets in regenie format
-iterator make_set_string*(gene_set: Table[string, Gene_set]): string =
+iterator make_set_string*(gene_set: Table[string, Gene_set]): string {.closure.} =
   var n = 0
   let interval = 1000
   for gene_id, gene_values in gene_set.pairs():
