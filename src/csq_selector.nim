@@ -274,16 +274,8 @@ proc main* () =
             of "vcf": close(out_vcf) 
             of "tsv": close(out_tsv)
             of "rarevar_set":
-                log("INFO", fmt"Writing setlist file for {gene_set.len} genes")
-                var n_genes = 0
-                for gene_id, gene_values in gene_set.pairs():
-                    n_genes += 1
-                    let set_string = [gene_id, gene_values.chrom, $gene_values.position, gene_values.vars.join(",")].join("\t")
-                    if n_genes < 10:
-                        log("INFO", fmt"{gene_values.vars.len} variants in setlist for gene {gene_id}. Reported for the first 10 genes")
-                    if floorMod(n_genes, 1000) == 0:
-                        log("INFO", fmt"{n_genes} gene sets processed")
-                    #out_setlist.writeLine(set_string)
+                for set_string in gene_set.make_set_string:
+                    out_setlist.writeLine(set_string)
                 close(out_setlist)
                 close(out_annot)
 
