@@ -252,18 +252,6 @@ proc update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: s
     gene_values.vars.add(var_id)
     gene_set[c.gene_id] = gene_values
 
-# Given a gene_set generate a seq of strings representing gene sets in regenie format
-iterator make_set_string*(gene_set: Table[string, Gene_set]): string {.closure.} =
-  var n = 0
-  let interval = 1000
-  for gene_id, gene_values in gene_set.pairs():
-    n += 1
-    if n < 10:
-      log("INFO", fmt"{gene_values.vars.len} variants in setlist for gene {gene_id}. Reported for the first 10 genes")
-    if floorMod(n, interval) == 0:
-      log("INFO", fmt"{n} gene sets processed")
-    yield [gene_id, gene_values.chrom, $gene_values.position, gene_values.vars.join(",")].join("\t")
-
 #Given a seq of csq strings and an impact order returns the highest severity consequence
 proc get_highest_impact(csqs: seq[Impact], gene_fields:GeneIndexes): Impact =
   #Change this to process over a seq of strings as csqs
