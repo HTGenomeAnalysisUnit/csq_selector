@@ -265,6 +265,7 @@ proc main* () =
             written_vars = written_vars + out_annot.write_anno_string(v, selected_csqs, opts.use_vcf_id)
             gene_set.update_gene_set(v, impacts, opts.use_vcf_id)
 
+    log("INFO", fmt"Finished processing {n} variants")
     close(vcf)
 
     # Close output streams and write setlist file if needed
@@ -273,6 +274,7 @@ proc main* () =
             of "vcf": close(out_vcf) 
             of "tsv": close(out_tsv)
             of "rarevar_set":
+                log("INFO", fmt"Writing {gene_set.len} gene sets to {opts.out}.setlist")
                 for set_string in gene_set.make_set_string:
                     out_setlist.writeLine(set_string)
                 close(out_setlist)
