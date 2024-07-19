@@ -18,11 +18,13 @@ The tool can output variants in either VCF, TSV or regenie set variant format, t
 
 Filters are applied in this order: 
 
-1. consequences are filtered based on allowed transcripts (intersection of the custom transcripts list and transcripts from expression matrix)
-2. remaining consequences are filtered retaining only those more severe than the specified min_impact
-3. the most severe filter is applied (if specified)
+1. consequences are filtered based on allowed transcripts (intersection of the [custom transcripts list](#set-transcripts-or-regions-of-interest) and transcripts [selected based on expression values](#expression-filter))
+2. remaining consequences are filtered retaining only those more severe than the [specified min_impact](#min-impact-filter)
+3. the most severe consequence is then selected if the ["most severe" flag is active](#most-severe-filter)
 
-In this way it is possible to accomodate sophisticated scenarios like getting only the most severe consequence across transcripts expressed in the tissue of interest, but only is consequence is at least exonic.
+In this way, it is possible to accomodate sophisticated scenarios. For example one can select only the most severe consequence across transcripts expressed in the tissue of interest, but only when consequence is at least exonic.
+
+The use of the `--mode` option can further refine the most severe filter. When set to `by_gene`, the most severe consequence is selected for each gene separately. This is useful when a variant affects more than one gene and the user is interested in the most severe consequence for each gene.
 
 ## Installation
 
@@ -47,7 +49,7 @@ cd csq_selector
 nimble build 
 ```
 
-If you have singularity installed, you can compile a static build using the `nim_compile.sh` script
+If you have singularity installed, you can compile a static sel-contained build using the `nim_compile.sh` script
 
 ## Usage
 
@@ -131,15 +133,15 @@ An example of the JSON file is:
 
 ```json
 {
-	"impact": {
-		"score_name": {
-			"value": 10,
-			"operator": ">="
-		},
+  "impact": {
+    "score_name": {
+      "value": 10,
+      "operator": ">="
+    },
     "flag_name": {
       "value": true
     }
-	}
+  }
 }
 ```
 
@@ -178,4 +180,4 @@ The format of these files is described in more detail in the [regenie docs](http
 
 Author: Edoardo Giacopuzzi
 
-This tool uses [hts-nim](https://github.com/brentp/hts-nim) for VCF processing and the most severe selection code is adapted from [a module in slivar](https://github.com/brentp/slivar/blob/master/src/slivarpkg/impact_order.nim) by Brent Pedersen.
+This tool uses [hts-nim](https://github.com/brentp/hts-nim) for VCF processing and the code to rank variant consequences is inspired from [a module in slivar](https://github.com/brentp/slivar/blob/master/src/slivarpkg/impact_order.nim) by Brent Pedersen.
