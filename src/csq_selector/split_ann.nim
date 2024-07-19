@@ -57,16 +57,6 @@ proc compare_values(x: float32, y: float, operator: string): bool =
     of "!=": result = x != y
     else: raise newException(ValueError, fmt"unknown operator: {operator}")
 
-proc compare_values(x: int32, y: int, operator: string): bool =
-  case operator:
-    of "<": result = x < y
-    of "<=": result = x <= y
-    of ">": result = x > y
-    of ">=": result = x >= y
-    of "==": result = x == y
-    of "!=": result = x != y
-    else: raise newException(ValueError, fmt"unknown operator: {operator}")
-
 #Split consequences from ANN/CSQ/BCSQ and returns a list of csq as Impact object
 proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impact_order: TableRef[string, int], tx_vers_re: Regex, max_impact: string = "", allowed_tx: HashSet[string], ranked_exp: HashSet[string], scores: JsonNode): (int, seq[Impact]) =
   var max_impact_order = 99
