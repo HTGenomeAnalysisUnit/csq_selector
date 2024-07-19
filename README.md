@@ -125,9 +125,9 @@ The min expression threshold is set using `--min_exp`. Only consequences affecti
 
 When the output format is set to `rarevar_set` it is possible to configure value thresholds based on annotations in the INFO field to refine variants categories. You can pass a JSON file to the `--scores` option to configure value thresholds to be applied for a specific impact and the variant annotation for that impact will reflect the number of scores thresholds that are passed. For example instead of just `missense`, the annotation could be `missense-1` or `missense-2` if the variant has a score above threshold for one or two values, respectively.
 
-Actually, any kind of operation is accepted on values (`>, >=, <, <=, ==, !=`), but the logic can only be applied to numeric values. 
+At the moment, this functionality only works with numeric or flag annotations. For numeric annotation, it is possible to configure a threashold value and the requested comparison (`>, >=, <, <=, ==, !=`).
 
-The JSON file should have the following structure:
+An example of the JSON file is:
 
 ```json
 {
@@ -135,15 +135,18 @@ The JSON file should have the following structure:
 		"score_name": {
 			"value": 10,
 			"operator": ">="
-		}
+		},
+    "flag_name": {
+      "value": true
+    }
 	}
 }
 ```
 
-- `impact` is the consequence level (like missense) and must match what exepected in the impact order
-- `score_name` is the name of the score to be considered. This must match the name of the INFO field in the VCF file
-- `value` is the numeric threshold value
-- `operator` is the operator to be used to compare the value in the VCF file with the threshold (any of `>, >=, <, <=, ==, !=`)
+- `impact` is the consequence for which scoring schema will be applied (like missense) and must match what exepected in the impact order
+- `score_name` / `flag_name` is the name of the numeric / flag annotation to be considered. This must match the name of the INFO field in the VCF file
+- `value` is the numeric threshold value or true/false for flag annotation
+- `operator` is the operator to be used to compare the value in the VCF file with the threshold (any of `>, >=, <, <=, ==, !=`). This is relevant only for numeric annotations.
 
 ## Output formats
 

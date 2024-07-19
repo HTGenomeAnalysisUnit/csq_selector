@@ -14,7 +14,7 @@ import csq_selector/tx_expression
 import csq_selector/split_ann
 import csq_selector/arg_parse
 
-const VERSION = "0.2"
+const VERSION = "0.3"
 const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE"
 
 proc write_new_var(wrt:VCF, v:Variant): bool {.inline.} =
@@ -47,7 +47,7 @@ proc write_anno_string(wrt:FileStream, v: Variant, csqs: seq[string], useid: boo
         wrt.writeLine([var_id,c].join("\t"))
         result += 1
     except:
-        discard
+        log("WARN", fmt"Could not write annotation string for variant {var_id} and consequence {c}")
 
 # Convenience iterator to read variants from a VCF with or without regions
 iterator readvar(v: VCF, regions: seq[string]): Variant =
@@ -265,6 +265,7 @@ proc main* () =
             written_vars = written_vars + out_annot.write_anno_string(v, selected_csqs, opts.use_vcf_id)
             gene_set.update_gene_set(v, impacts, opts.use_vcf_id)
 
+    log("INFO", fmt"Finished processing {n} variants")
     close(vcf)
 
     # Close output streams and write setlist file if needed
@@ -273,9 +274,9 @@ proc main* () =
             of "vcf": close(out_vcf) 
             of "tsv": close(out_tsv)
             of "rarevar_set":
-                log("INFO", fmt"Writing setlist file for {gene_set.len} genes")
-                for line in gene_set.make_set_string:
-                    out_setlist.writeLine(line)
+                log("INFO", fmt"Writing {gene_set.len} gene sets to {opts.out}.setlist")
+                for set_string in gene_set.make_set_string:
+                    out_setlist.writeLine(set_string)
                 close(out_setlist)
                 close(out_annot)
 

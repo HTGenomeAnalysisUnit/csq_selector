@@ -7,6 +7,7 @@ import system
 import tables
 import re
 import std/sets
+from math import floorMod
 from ./utils import log, cleanTxVersion
 from ./tx_expression import Ranked_exp
 # import sequtils
@@ -47,16 +48,6 @@ proc `$`*(x: seq[Impact]): string =
   result = csqs.join("; ")
 
 proc compare_values(x: float32, y: float, operator: string): bool =
-  case operator:
-    of "<": result = x < y
-    of "<=": result = x <= y
-    of ">": result = x > y
-    of ">=": result = x >= y
-    of "==": result = x == y
-    of "!=": result = x != y
-    else: raise newException(ValueError, fmt"unknown operator: {operator}")
-
-proc compare_values(x: int32, y: int, operator: string): bool =
   case operator:
     of "<": result = x < y
     of "<=": result = x <= y
@@ -108,18 +99,16 @@ proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impa
           var csq_scores = scores[impact]
           for score_tag in csq_scores.keys:
             let score_obj =  csq_scores[score_tag]
-            if score_obj["value"].kind == JFloat:
+            if score_obj["value"].kind == JFloat or score_obj["value"].kind == JInt:
               let score_threshold = score_obj["value"].getFloat()
               var score_value: seq[float32] 
               if v.info.get(score_tag, score_value) == Status.OK:
                 if compare_values(score_value[0], score_threshold, score_obj{"operator"}.getStr(">")):
                   n_pass_scores += 1
-            elif score_obj["value"].kind == JInt:
-              let score_threshold = score_obj["value"].getInt()
-              var score_value: seq[int32] 
-              if v.info.get(score_tag, score_value) == Status.OK:
-                if compare_values(score_value[0], score_threshold, score_obj{"operator"}.getStr(">")):
-                  n_pass_scores += 1
+            elif score_obj["value"].kind == JBool:
+              let flag_value = score_obj["value"].getBool()
+              if v.info.has_flag(score_tag) == flag_value:
+                n_pass_scores += 1
         except:
           discard
 
@@ -254,9 +243,16 @@ proc update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: s
     gene_set[c.gene_id] = gene_values
 
 # Given a gene_set generate a seq of strings representing gene sets in regenie format
-proc make_set_string*(gene_set: Table[string, Gene_set]): seq[string] =
+iterator make_set_string*(gene_set: Table[string, Gene_set]): string {.closure.} =
+  var n = 0
+  let interval = 1000
   for gene_id, gene_values in gene_set.pairs():
-    result.add([gene_id, gene_values.chrom, $gene_values.position, gene_values.vars.join(",")].join("\t"))
+    n += 1
+    if n < 10:
+      log("INFO", fmt"{gene_values.vars.len} variants in setlist for gene {gene_id}. Reported for the first 10 genes")
+    if floorMod(n, interval) == 0:
+      log("INFO", fmt"{n} gene sets processed")
+    yield [gene_id, gene_values.chrom, $gene_values.position, gene_values.vars.join(",")].join("\t")
 
 #Given a seq of csq strings and an impact order returns the highest severity consequence
 proc get_highest_impact(csqs: seq[Impact], gene_fields:GeneIndexes): Impact =

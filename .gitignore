@@ -1,3 +1,4 @@
 test/out
 bin/
 localcompile.sh
+.DS_Store
