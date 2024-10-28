@@ -207,7 +207,7 @@ proc main* () =
         of "tsv":
             var header = TSV_HEADER
             for c in gene_fields.columns.keys():
-                header &= &"\t{c}"  
+                header &= &"\tCSQ_{c}"  
             if opts.out != "":
                 out_tsv = newFileStream(opts.out, fmWrite)
                 if isNil(out_tsv):

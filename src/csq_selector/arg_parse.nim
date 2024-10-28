@@ -8,7 +8,8 @@ var p = newParser("CSQ Selector"):
     option("-o", "--out", help="Output file")
     option("-O", "--out_format", help="Output format", default = some("vcf"), choices = @["vcf", "tsv", "rarevar_set"])
     option("-c", "--csq_field", help="INFO field containing the gene name and impact. Usually CSQ, ANN or BCSQ", default = some("ANN"))
-    option("--csq-column", help="CSQ sub-field(s) to extract (in addition to gene, impact, transcript) when output is TSV. A comma-separated list of sub-fields can be provided")
+    option("--csq_column", help="CSQ sub-field(s) to extract (in addition to gene, impact, transcript) when output is TSV. A comma-separated list of sub-fields can be provided")
+    option("--info_column", help="INFO field(s) to extract when output is TSV. A comma-separated list can be provided")
     option("-e", "--exp_data", help="path to expression file. Tab-separated table of transcript expression across conditions")
     option("-n", "--min_exp", help="Min expression value for a transcript to be considered expressed")
     option("--tissues", help="List of tissues to select in the expression file. Comma-separated list or file with 1 tissue per line.")        
@@ -48,6 +49,8 @@ proc logArgs*(opts: ref) {.discardable.} =
         log("ARG", fmt"Custom impact order: {opts.impact_order}")
     if opts.csq_column != "":
         log("ARG", fmt"Additional CSQ columns: {opts.csq_column}")
+    if opts.info_column != "":
+        log("ARG", fmt"Additional INFO fields: {opts.info_column}")
     if opts.most_severe:
         active_filters.add("most_severe")
         log("ARG", fmt"Most severe active with mode {opts.mode}")
