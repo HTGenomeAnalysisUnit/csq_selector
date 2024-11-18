@@ -13,14 +13,27 @@ from ./tx_expression import Ranked_exp
 # import sequtils
 
 #Store indexes for gene annotations in the CSQ field seq
-type GeneIndexes* = object
+type CsqFieldIndexes* = object
+  csq_field*: string
   gene_id*: int
   gene_symbol*: int
   consequence*: int
   transcript*: int
-  csq_field*: string
-
   columns*: OrderedTableRef[string, int]
+
+# Store configuration to parse and filter csqs
+type Config* = object
+  csq_field_name: string
+  csq_field_idxs: CsqFieldIndexes
+  max_impact: string
+  allowed_tx: HashSet[string]
+  ranked_exp: HashSet[string]
+  most_severe: bool
+  most_expressed: bool
+  group_by_gene: bool
+  tagging_config: JsonNode
+  csq_additional_fields: seq[string]
+  tx_vers_re: Regex
 
 #Store impact information
 type Impact* = object
@@ -31,7 +44,9 @@ type Impact* = object
   impact: string
   order: int
   csq_string: string
-  pass_scores: int
+  csq_fields: TableRef[string, string]
+  tag_suffix: HashSet[string]
+  scores_suffix: int
 
 type Gene_set* = object 
   chrom: string
@@ -57,28 +72,61 @@ proc compare_values(x: float32, y: float, operator: string): bool =
     of "!=": result = x != y
     else: raise newException(ValueError, fmt"unknown operator: {operator}")
 
+#Given a seq of csq string returns csqs per gene in a table
+proc get_csq_bygene(csqs: seq[Impact]): Table[string, seq[Impact]] {.inline.} =
+  for c in csqs:
+    if result.hasKeyOrPut(c.gene_id, @[c]): 
+      result[c.gene_id].add(c)
+
+#Given a seq of csq strings and an impact order returns the highest severity consequence
+proc get_highest_impact(csqs: seq[Impact]): Impact =
+  #Change this to process over a seq of strings as csqs
+  result.gene_id = "unknown"
+  result.gene_symbol = "unknown"
+  result.transcript = "uknown"
+  result.impact = "unknown"
+  result.order = 99
+  result.csq_string = "unknown"
+  
+  for c in csqs:
+    if c.order < result.order:
+      result = c
+
+#Process variant and returns the most severe impact across all genes or by gene
+proc get_most_severe*(csqs:seq[Impact], by_gene: bool): seq[Impact] =
+  if by_gene:
+    var by_gene_csqs = csqs.get_csq_bygene
+    for gene_id, gene_csqs in by_gene_csqs.pairs():
+      var imp = gene_csqs.get_highest_impact
+      result.add(imp)
+
+  else:
+    var imp = csqs.get_highest_impact
+    result.add(imp)
+
 #Split consequences from ANN/CSQ/BCSQ and returns a list of csq as Impact object
-proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impact_order: TableRef[string, int], tx_vers_re: Regex, max_impact: string = "", allowed_tx: HashSet[string], ranked_exp: HashSet[string], scores: JsonNode): (int, seq[Impact]) =
+proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int]): (int, seq[Impact]) =
+  let field_indexes = config.csq_field_idxs
   var max_impact_order = 99
-  if max_impact != "":
-    max_impact_order = impact_order[max_impact]
+  if config.max_impact != "":
+    max_impact_order = impact_order[config.max_impact]
   
   var 
     s = ""
     csqfield_missing = 0
     parsed_impacts: seq[Impact]
   
-  if v.info.get(csq_field_name, s) != Status.OK: 
+  if v.info.get(config.csq_field_name, s) != Status.OK: 
     csqfield_missing = 1
   else:
     let csqs = s.split(',')  
-    for tr in csqs:
-      var toks = tr.split('|')
-      var tx = toks[gene_fields.transcript]
-      tx = tx.cleanTxVersion(tx_vers_re)
-      if allowed_tx.len > 0 and not allowed_tx.contains(tx): continue
-      if ranked_exp.len > 0 and not ranked_exp.contains(tx): continue
-      for i in toks[gene_fields.consequence].split('&'):
+    for csq in csqs:
+      var toks = csq.split('|')
+      var tx = toks[field_indexes.transcript]
+      tx = tx.cleanTxVersion(config.tx_vers_re)
+      if config.allowed_tx.len > 0 and not config.allowed_tx.contains(tx): continue
+      if config.ranked_exp.len > 0 and not config.ranked_exp.contains(tx): continue
+      for i in toks[field_indexes.consequence].split('&'):
         var x: Impact
 
         var impact = i.toLowerAscii
@@ -89,50 +137,126 @@ proc split_csqs*(v:Variant, csq_field_name:string, gene_fields:GeneIndexes, impa
         try:
           val = impact_order[impact]
         except:
-          log("WARNING", fmt"unknown impact '{impact}' from csq '{tr}' please report the variant to the developers")
+          log("WARNING", fmt"unknown impact '{impact}' from csq '{csq}' please report the variant to the developers")
           val = impact_order.getOrDefault("PROTCHANGE_CUTOFF", 1)
 
         if val > max_impact_order: continue
 
-        var n_pass_scores = 0
-        try:
-          var csq_scores = scores[impact]
-          for score_tag in csq_scores.keys:
-            let score_obj =  csq_scores[score_tag]
-            if score_obj["value"].kind == JFloat or score_obj["value"].kind == JInt:
-              let score_threshold = score_obj["value"].getFloat()
-              var score_value: seq[float32] 
-              if v.info.get(score_tag, score_value) == Status.OK:
-                if compare_values(score_value[0], score_threshold, score_obj{"operator"}.getStr(">")):
-                  n_pass_scores += 1
-            elif score_obj["value"].kind == JBool:
-              let flag_value = score_obj["value"].getBool()
-              if v.info.has_flag(score_tag) == flag_value:
-                n_pass_scores += 1
-        except:
-          discard
+        var scoring = 0
+        var tags: HashSet[string]
+        
+        var csq_classes_config = %* {}
+        if config.tagging_config.hasKey("csq_tags"): csq_classes_config = config.tagging_config["csq_tags"]
+        if not csq_classes_config.hasKey(impact): continue
 
-        x.gene_id = toks[gene_fields.gene_id].cleanTxVersion(tx_vers_re)
-        x.gene_symbol = toks[gene_fields.gene_symbol]
+        let csq_classes_impact = csq_classes_config[impact]
+        var tagging_config = %* {}
+        var scoring_config = %* {}
+        if csq_classes_impact.hasKey("tagging"): tagging_config = csq_classes_impact["tagging"]
+        if csq_classes_impact.hasKey("scoring"): scoring_config = csq_classes_impact["scoring"]
+        
+        if tagging_config.len > 0:
+          let tag = tagging_config["tag"].getStr()
+          if tagging_config.hasKey("csq_field"):
+            for k in tagging_config["csq_field"].keys:
+              let field_name = tagging_config["csq_field"][k].getStr()
+              let tag_obj = tagging_config["csq_field"][k]
+              if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
+                let field_value = toks[field_indexes.columns[field_name]].parseFloat()
+                let score_threshold = tag_obj["value"].getFloat()
+                if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
+                  tags.incl(tag)
+              elif tag_obj["value"].kind == JString:
+                let field_value = toks[field_indexes.columns[field_name]]
+                let flag_value = tag_obj["value"].getStr()
+                if field_value == flag_value:
+                  tags.incl(tag)
+              elif tag_obj["value"].kind == JBool:
+                let field_value = toks[field_indexes.columns[field_name]]
+                let flag_value = tag_obj["value"].getBool()
+                if (field_value != "") == flag_value:
+                  tags.incl(tag)
+          
+          if tagging_config.hasKey("info"):
+            for k in tagging_config["info"].keys:
+              let tag_obj = tagging_config["csq_field"][k]
+              if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
+                let score_threshold = tag_obj["value"].getFloat()
+                var info_value: seq[float32] 
+                if v.info.get(k, info_value) == Status.OK:
+                  if compare_values(info_value[0], score_threshold, tag_obj{"operator"}.getStr(">")):
+                    tags.incl(tag)
+              elif tag_obj["value"].kind == JString:
+                let flag_value = tag_obj["value"].getStr()
+                var info_value: string
+                if v.info.get(k, info_value) == Status.OK:
+                  if info_value == flag_value:
+                    tags.incl(tag)
+              elif tag_obj["value"].kind == JBool:
+                let flag_value = tag_obj["value"].getBool()
+                if v.info.has_flag(k) == flag_value:
+                  tags.incl(tag)
+              
+        if scoring_config.len > 0:
+          if scoring_config.hasKey("csq_field"):
+            for k in scoring_config["csq_field"].keys:
+              let field_name = scoring_config["csq_field"][k].getStr()
+              let tag_obj = scoring_config["csq_field"][k]
+              if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
+                let field_value = toks[field_indexes.columns[field_name]].parseFloat()
+                let score_threshold = tag_obj["value"].getFloat()
+                if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
+                  scoring += 1
+              elif tag_obj["value"].kind == JString:
+                let field_value = toks[field_indexes.columns[field_name]]
+                let flag_value = tag_obj["value"].getStr()
+                if field_value == flag_value:
+                  scoring += 1
+              elif tag_obj["value"].kind == JBool:
+                let field_value = toks[field_indexes.columns[field_name]]
+                let flag_value = tag_obj["value"].getBool()
+                if (field_value != "") == flag_value:
+                  scoring += 1
+          
+          if scoring_config.hasKey("info"):
+            for k in scoring_config["info"].keys:
+              let tag_obj = scoring_config["csq_field"][k]
+              if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
+                let score_threshold = tag_obj["value"].getFloat()
+                var info_value: seq[float32] 
+                if v.info.get(k, info_value) == Status.OK:
+                  if compare_values(info_value[0], score_threshold, tag_obj{"operator"}.getStr(">")):
+                    scoring += 1
+              elif tag_obj["value"].kind == JString:
+                let flag_value = tag_obj["value"].getStr()
+                var info_value: string
+                if v.info.get(k, info_value) == Status.OK:
+                  if info_value == flag_value:
+                    scoring += 1
+              elif tag_obj["value"].kind == JBool:
+                let flag_value = tag_obj["value"].getBool()
+                if v.info.has_flag(k) == flag_value:
+                  scoring += 1
+
+        x.gene_id = toks[config.csq_field_idxs.gene_id].cleanTxVersion(config.tx_vers_re)
+        x.gene_symbol = toks[config.csq_field_idxs.gene_symbol]
         x.transcript = tx
-        x.transcript_version = toks[gene_fields.transcript]
+        x.transcript_version = toks[config.csq_field_idxs.transcript]
         x.impact = impact
         x.order = val
-        x.csq_string = tr
-        x.pass_scores = n_pass_scores
+        x.csq_string = csq
+        x.tag_suffix = tags
+        x.scores_suffix = scoring
         
         parsed_impacts.add(x)
 
+        if config.most_severe:
+          parsed_impacts = get_most_severe(parsed_impacts, config.group_by_gene)
+
   result = (csqfield_missing, parsed_impacts)
 
-#Given a seq of csq string returns csqs per gene in a table
-proc get_csq_bygene(csqs: seq[Impact], gene_fields:GeneIndexes): Table[string, seq[Impact]] {.inline.} =
-  for c in csqs:
-    if result.hasKeyOrPut(c.gene_id, @[c]): 
-      result[c.gene_id].add(c)
-
 #Read header and set CSQ indexes for relevant fields
-proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var GeneIndexes, csq_columns: seq[string]= @[]): seq[string] {.discardable.} =
+proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var CsqFieldIndexes, csq_columns: seq[string]= @[]): seq[string] {.discardable.} =
   gene_fields.gene_id = -1
   gene_fields.gene_symbol = -1
   gene_fields.csq_field = field
@@ -167,11 +291,14 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var GeneIndexes, c
     return result
 
   for v in adesc.mitems: v = v.toUpperAscii.strip()
+  for (i, v) in adesc.pairs:
+    gene_fields.columns[v] = i
   result = adesc
 
+  # check if all requested columns are present
   for cq in csq_columns:
-    gene_fields.columns[cq] = adesc.find(cq.toUpperAscii)
-    if gene_fields.columns[cq] == -1:
+    let idx = adesc.find(cq.toUpperAscii)
+    if idx == -1:
       raise newException(KeyError, fmt"requested csq column '{cq}' not found in {adesc}")
 
   #ANN: symbol=GENE_NAME, id=GENE_ID, transcript=FEATURE_ID, csq=ANNOTATION
@@ -201,7 +328,7 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var GeneIndexes, c
     quit "", QuitFailure
 
 #Create csq output strings according to format
-proc get_csq_string*(csqs: seq[Impact], gene_fields: GeneIndexes, format: string): seq[string] =
+proc get_csq_string*(csqs: seq[Impact], gene_fields: CsqFieldIndexes, format: string): seq[string] =
   ## get the gene_names and consequences for each transcript.
   ## Adapt this to be able to output TSV format
 
@@ -221,10 +348,12 @@ proc get_csq_string*(csqs: seq[Impact], gene_fields: GeneIndexes, format: string
       of "vcf":
         result.add(x.csq_string)
       of "rarevar_set":
-        if x.pass_scores == 0:
-          result.add([x.gene_id, x.impact].join("\t"))
-        else:
-          result.add([x.gene_id, fmt"{x.impact}-{x.pass_scores}"].join("\t"))
+        var impact_str = x.impact
+        if x.tag_suffix.len > 0:
+          for t in x.tag_suffix: impact_str.add("-" & t)          
+        if x.scores_suffix > 0:
+          impact_str = fmt"{impact_str}-{x.scores_suffix}"
+        result.add([x.gene_id, impact_str].join("\t"))
       else:
         raise newException(ValueError, fmt"unknown output format: {format}")
 
@@ -254,34 +383,8 @@ iterator make_set_string*(gene_set: Table[string, Gene_set]): string {.closure.}
       log("INFO", fmt"{n} gene sets processed")
     yield [gene_id, gene_values.chrom, $gene_values.position, gene_values.vars.join(",")].join("\t")
 
-#Given a seq of csq strings and an impact order returns the highest severity consequence
-proc get_highest_impact(csqs: seq[Impact], gene_fields:GeneIndexes): Impact =
-  #Change this to process over a seq of strings as csqs
-  result.gene_id = "unknown"
-  result.gene_symbol = "unknown"
-  result.transcript = "uknown"
-  result.impact = "unknown"
-  result.order = 99
-  result.csq_string = "unknown"
-  
-  for c in csqs:
-    if c.order < result.order:
-      result = c
-
-#Process variant and returns the most severe impact across all genes or by gene
-proc get_most_severe*(csqs:seq[Impact], gene_fields:GeneIndexes, by_gene: bool): seq[Impact] =
-  if by_gene:
-    var by_gene_csqs = csqs.get_csq_bygene(gene_fields)
-    for gene_id, gene_csqs in by_gene_csqs.pairs():
-      var imp = gene_csqs.get_highest_impact(gene_fields)
-      result.add(imp)
-
-  else:
-    var imp = csqs.get_highest_impact(gene_fields)
-    result.add(imp)
-
 #Given a seq of csq strings and an exp rank returns the highest severity consequence
-proc get_highest_expressed(csqs: seq[Impact], gene_fields:GeneIndexes, exp_order: seq[string], allow_miss: bool = true): seq[Impact] =
+proc get_highest_expressed(csqs: seq[Impact], gene_fields:CsqFieldIndexes, exp_order: seq[string], allow_miss: bool = true): seq[Impact] =
   var imp: Impact
   var tx_seq = exp_order
   for c in csqs:
@@ -295,9 +398,9 @@ proc get_highest_expressed(csqs: seq[Impact], gene_fields:GeneIndexes, exp_order
   result.add(imp)
 
 #Process variant and returns the csq for the most expressed transcript across all genes or by gene
-proc get_most_expressed*(csqs:seq[Impact], gene_fields:GeneIndexes, exp: Ranked_exp, by_gene: bool, allow_miss: bool = true): seq[Impact] =  
+proc get_most_expressed*(csqs:seq[Impact], gene_fields:CsqFieldIndexes, exp: Ranked_exp, by_gene: bool, allow_miss: bool = true): seq[Impact] =  
   if by_gene:
-    var by_gene_csqs = csqs.get_csq_bygene(gene_fields)
+    var by_gene_csqs = csqs.get_csq_bygene
     for gene_id, gene_csqs in by_gene_csqs.pairs():
       var gene_tx_rank = exp.by_gene.getOrDefault(gene_id, @[])
       var imp = gene_csqs.get_highest_expressed(gene_fields, gene_tx_rank, allow_miss)
@@ -308,7 +411,7 @@ proc get_most_expressed*(csqs:seq[Impact], gene_fields:GeneIndexes, exp: Ranked_
     result.add(imp)
 
 #Given a seq of csq strings and a max impact returns csqs more severe than max impact
-proc filter_impact(csqs: seq[Impact], gene_fields:GeneIndexes, impact_order: TableRef[string, int], max_impact: string): seq[Impact] =
+proc filter_impact(csqs: seq[Impact], impact_order: TableRef[string, int], max_impact: string): seq[Impact] =
   #Max_impact is expected to be in the impact_order table
   let max_impact_order = impact_order[max_impact]
     
@@ -317,13 +420,13 @@ proc filter_impact(csqs: seq[Impact], gene_fields:GeneIndexes, impact_order: Tab
       result.add(c)
 
 #Process variant and returns the
-proc get_filtered_csqs*(csqs:seq[Impact], gene_fields:GeneIndexes, impact_order: TableRef[string, int], max_impact: string, by_gene: bool): seq[Impact] = 
+proc get_filtered_csqs*(csqs:seq[Impact], gene_fields:CsqFieldIndexes, impact_order: TableRef[string, int], max_impact: string, by_gene: bool): seq[Impact] = 
   if by_gene:
-    var by_gene_csqs = csqs.get_csq_bygene(gene_fields)
+    var by_gene_csqs = csqs.get_csq_bygene
     for gene_id, gene_csqs in by_gene_csqs.pairs():
-      var imp = gene_csqs.filter_impact(gene_fields, impact_order, max_impact)
+      var imp = gene_csqs.filter_impact(impact_order, max_impact)
       result.add(imp)
 
   else:
-    var imp = csqs.filter_impact(gene_fields, impact_order, max_impact)
+    var imp = csqs.filter_impact(impact_order, max_impact)
     result.add(imp)

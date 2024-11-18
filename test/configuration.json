@@ -1,0 +1,37 @@
+{
+	"csq_classes": {
+		"missense": {
+			"scoring": {
+				"info": {
+					"CADD_phred": {
+							"value": 20.0,
+							"operator": ">="
+					},
+					"REVEL_score": {
+							"value": 0.5,
+							"operator": ">="
+					},
+					"LCR": {
+						"value": false
+					}
+				}
+			}
+		},
+		"stopgain": {
+			"tagging": {
+				"tag": "HC",
+				"csq_field": {
+					"LoF": {
+						"value": "HC"
+					}
+				},
+				"info" : {
+					"AF": {
+						"value": 0.01,
+						"operator": "<"
+					}
+				}
+			}
+		}
+	}
+}

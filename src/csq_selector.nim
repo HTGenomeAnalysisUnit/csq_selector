@@ -125,7 +125,7 @@ proc main* () =
             log("FATAL", "--min_exp requires --exp_data to be set")
             quit "", QuitFailure
         if not fileExists(opts.exp_data):
-            log("FATAL", "--exo_data file does not exist")
+            log("FATAL", "--exp_data file does not exist")
             quit "", QuitFailure
         if tissues.len == 0:
             log("FATAL", "No tissues can be loaded from file/list specified by --tissues")
@@ -226,20 +226,19 @@ proc main* () =
         n = n + 1
         var (dolog, log_msg) = progress_counter(n, interval, t0)
         if dolog: log("INFO", log_msg)
-        var (csqfield_missing, impacts) = v.split_csqs(opts.csq_field, gene_fields, impact_order, TX_VERS_RE, min_impact, allowed_transcripts, ranked_exp, scores_json)
-        n_nocsqfield += csqfield_missing
         
-        if impacts.len == 0: 
-            n_noimpact += 1
-        else:
-            if opts.most_severe:
-                impacts = impacts.get_most_severe(gene_fields, by_gene)
-    
+        var (csqfield_missing, impacts) = v.split_csqs(opts.csq_field, csq_config, impact_order)
+
         if opts.keep_old_ann and csqfield_missing == 0 and opts.out_format == "vcf":
             var old_ann: string
             doAssert v.info.get(opts.csq_field, old_ann) == Status.OK
             doAssert v.info.set("ORIGINAL_ANN", old_ann) == Status.OK
 
+        n_nocsqfield += csqfield_missing
+        
+        if impacts.len == 0: 
+            n_noimpact += 1
+    
         let selected_csqs = impacts.get_csq_string(gene_fields, opts.out_format)
         
         if opts.out_format == "vcf":
