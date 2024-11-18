@@ -14,21 +14,27 @@ import csq_selector/tx_expression
 import csq_selector/split_ann
 import csq_selector/arg_parse
 
-const VERSION = "0.3"
+const VERSION = "0.4"
 const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE"
 
 proc write_new_var(wrt:VCF, v:Variant): bool {.inline.} =
     result = wrt.write_variant(v)
 
-proc var2string(v:Variant, csq: string): string {.inline.} =
+proc var2string(v:Variant, csq: string, info_fields: seq[string]): string {.inline.} =
     var alts: seq[string]
     for a in v.ALT: alts.add(a) 
 
-    let outline = @[ $v.CHROM, $v.POS, $v.ID, v.REF, alts.join(","), v.FILTER, csq ]
+    var outline = @[ $v.CHROM, $v.POS, $v.ID, v.REF, alts.join(","), v.FILTER, csq ]
+    var info_string: string
+    for x in info_fields:
+        if v.info.get(x, info_string) == Status.OK:
+            outline.add(info_string)
+        else:
+            outline.add(".")
     result = outline.join("\t")
 
-proc write_new_var(wrt:FileStream, v:Variant, csq: string): bool {.inline.} =
-    let outline = var2string(v, csq)
+proc write_new_var(wrt:FileStream, v:Variant, csq: string, info_fields: seq[string]): bool {.inline.} =
+    let outline = var2string(v, csq, info_fields)
     try:
         wrt.writeLine(outline)
         result = true
@@ -74,8 +80,13 @@ proc main* () =
     var opts = parseCmdLine()
     opts.logArgs()
 
+    let 
+        by_gene = (if opts.mode == "by_gene": true else: false)
+        csq_columns = (if opts.csq_column != "": opts.csq_column.split(",") else: @[])
+        info_fields = (if opts.info_column != "": opts.info_column.split(",") else: @[])
+        most_severe = opts.most_severe
+
     #Check at least one filter is active for VCF output
-    var most_severe = opts.most_severe
     if not (most_severe or opts.transcripts != "" or opts.min_impact != "" or opts.min_exp != ""):
         if opts.out_format == "tsv":
             log("WARN", "No filters active, just output TSV of all consequences")
@@ -135,23 +146,49 @@ proc main* () =
             log("FATAL", fmt"No transcripts ranked above the minimum expression threshold ({min_exp})")
             quit "", QuitFailure
 
-    # Load scores from JSON if provided
-    var scores_json: JsonNode
-    var scores_csq_keys: seq[string]
-    var scores_fields: seq[string]
-    if opts.scores != "":
+    # Load tag shema from JSON if provided
+    var tag_config_json: JsonNode
+    var tag_csq_keys: seq[string]
+    var tag_info_fields: seq[string]
+    var tag_csq_fields: seq[string]
+    if opts.var_tagging_json != "":
         if opts.out_format == "vcf":
             log("WARNING", "--scores can only be used with rarevar_set output and will be ignored")
         else:
-            scores_json = parseFile(opts.scores)
-            for k in scores_json.fields.keys:
-                scores_csq_keys.add(k)
-                let csq_scores = scores_json[k]
-                for s in csq_scores.keys:
-                    scores_fields.add(s)
-            log("INFO", fmt"Loaded scores for {$scores_csq_keys} consequences")
-            log("INFO", fmt"Looking for the following score fields {$scores_fields}")
+            tag_config_json = parseFile(opts.var_tagging_json)
+            for k in tag_config_json["csq_classes"].keys:
+                tag_csq_keys.add(k)
+                let tagging_config = (if tag_config_json["csq_classes"][k].hasKey("tagging"): tag_config_json["csq_classes"][k]["tagging"] else: %* {})
+                let scoring_config = (if tag_config_json["csq_classes"][k].hasKey("scoring"): tag_config_json["csq_classes"][k]["scoring"] else: %* {})
+                if scoring_config.hasKey("info"):
+                    for s in scoring_config["info"].keys:
+                        tag_info_fields.add(s)
+                if scoring_config.hasKey("csq_field"):
+                    for s in scoring_config["csq_field"].keys:
+                        tag_csq_fields.add(s)
+                if tagging_config.hasKey("info"):
+                    for s in tagging_config["info"].keys:
+                        tag_info_fields.add(s)
+                if tagging_config.hasKey("csq_field"):
+                    for s in tagging_config["csq_field"].keys:
+                        tag_csq_fields.add(s)
+            log("INFO", fmt"Loaded scores for {$tag_csq_keys} consequences")
+            log("INFO", fmt"Looking for the following fields from INFO {$tag_info_fields}")
+            log("INFO", fmt"Looking for the following fields from CSQ field {$tag_csq_fields}")
     
+    # Set CSQ config
+    var csq_config: Config
+    csq_config.csq_field_name = opts.csq_field
+    csq_config.min_impact = opts.min_impact
+    csq_config.allowed_tx = allowed_transcripts
+    csq_config.ranked_exp = ranked_exp
+    csq_config.most_severe = most_severe
+    #csq_config.most_expressed: bool # not implemented yet
+    csq_config.group_by_gene = by_gene
+    csq_config.tagging_config = tag_config_json
+    csq_config.csq_output_fields = csq_columns
+    csq_config.tx_vers_re = TX_VERS_RE
+
     # Set output streams
     var out_vcf:VCF
     var out_tsv:FileStream
@@ -169,7 +206,6 @@ proc main* () =
         n = 0
         n_noimpact = 0
         n_nocsqfield = 0
-        by_gene = (if opts.mode == "by_gene": true else: false)
 
     var vcf:VCF
     if not open(vcf, opts.vcf):
@@ -177,13 +213,11 @@ proc main* () =
         quit "", QuitFailure
 
     # Get GeneIndex from header
-    var gene_fields: GeneIndexes
-    let csq_columns = (if opts.csq_column != "": opts.csq_column.split(",") else: @[])
-    vcf.set_csq_fields_idx(opts.csq_field, gene_fields, csq_columns)
+    vcf.set_csq_fields_idx(opts.csq_field, csq_config.csq_field_idxs, csq_columns)
 
     # If we have scores are set, check they are defined in the header
     var desc: string
-    for s in scores_fields:
+    for s in tag_info_fields:
         try:
             desc = vcf.header.get(s, BCF_HEADER_TYPE.BCF_HL_INFO)["Description"]
         except:
@@ -206,7 +240,7 @@ proc main* () =
                 stdout.writeLine($out_header)
         of "tsv":
             var header = TSV_HEADER
-            for c in gene_fields.columns.keys():
+            for c in csq_config.csq_output_fields:
                 header &= &"\tCSQ_{c}"  
             if opts.out != "":
                 out_tsv = newFileStream(opts.out, fmWrite)
@@ -227,7 +261,7 @@ proc main* () =
         var (dolog, log_msg) = progress_counter(n, interval, t0)
         if dolog: log("INFO", log_msg)
         
-        var (csqfield_missing, impacts) = v.split_csqs(opts.csq_field, csq_config, impact_order)
+        var (csqfield_missing, impacts) = v.split_csqs(csq_config, impact_order)
 
         if opts.keep_old_ann and csqfield_missing == 0 and opts.out_format == "vcf":
             var old_ann: string
@@ -239,7 +273,7 @@ proc main* () =
         if impacts.len == 0: 
             n_noimpact += 1
     
-        let selected_csqs = impacts.get_csq_string(gene_fields, opts.out_format)
+        let selected_csqs = impacts.get_csq_string(csq_config.csq_output_fields, opts.out_format)
         
         if opts.out_format == "vcf":
             if selected_csqs.len > 0:
@@ -256,10 +290,10 @@ proc main* () =
         elif opts.out_format == "tsv":
             for x in selected_csqs:
                 if opts.out != "":
-                    if out_tsv.write_new_var(v, x): written_vars += 1
+                    if out_tsv.write_new_var(v, x, info_fields): written_vars += 1
                 else:
                     written_vars += 1
-                    stdout.writeLine(v.var2string(x))
+                    stdout.writeLine(v.var2string(x, info_fields))
         elif opts.out_format == "rarevar_set":
             written_vars = written_vars + out_annot.write_anno_string(v, selected_csqs, opts.use_vcf_id)
             gene_set.update_gene_set(v, impacts, opts.use_vcf_id)

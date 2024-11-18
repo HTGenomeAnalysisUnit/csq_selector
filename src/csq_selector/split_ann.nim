@@ -23,17 +23,17 @@ type CsqFieldIndexes* = object
 
 # Store configuration to parse and filter csqs
 type Config* = object
-  csq_field_name: string
-  csq_field_idxs: CsqFieldIndexes
-  max_impact: string
-  allowed_tx: HashSet[string]
-  ranked_exp: HashSet[string]
-  most_severe: bool
-  most_expressed: bool
-  group_by_gene: bool
-  tagging_config: JsonNode
-  csq_additional_fields: seq[string]
-  tx_vers_re: Regex
+  csq_field_name*: string
+  csq_field_idxs*: CsqFieldIndexes
+  min_impact*: string
+  allowed_tx*: HashSet[string]
+  ranked_exp*: HashSet[string]
+  most_severe*: bool
+  most_expressed*: bool
+  group_by_gene*: bool
+  tagging_config*: JsonNode
+  csq_output_fields*: seq[string]
+  tx_vers_re*: Regex
 
 #Store impact information
 type Impact* = object
@@ -108,8 +108,8 @@ proc get_most_severe*(csqs:seq[Impact], by_gene: bool): seq[Impact] =
 proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int]): (int, seq[Impact]) =
   let field_indexes = config.csq_field_idxs
   var max_impact_order = 99
-  if config.max_impact != "":
-    max_impact_order = impact_order[config.max_impact]
+  if config.min_impact != "":
+    max_impact_order = impact_order[config.min_impact]
   
   var 
     s = ""
@@ -328,7 +328,7 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var CsqFieldIndexe
     quit "", QuitFailure
 
 #Create csq output strings according to format
-proc get_csq_string*(csqs: seq[Impact], gene_fields: CsqFieldIndexes, format: string): seq[string] =
+proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string): seq[string] =
   ## get the gene_names and consequences for each transcript.
   ## Adapt this to be able to output TSV format
 
@@ -341,9 +341,8 @@ proc get_csq_string*(csqs: seq[Impact], gene_fields: CsqFieldIndexes, format: st
           x.transcript_version,
           x.impact
         ]
-        var toks = x.csq_string.split('|')
-        for c, ci in gene_fields.columns:
-          line.add(if ci < toks.len: toks[ci] else: "")
+        for c in csq_columns:
+          line.add(x.csq_fields.getOrDefault(c))
         result.add(line.join("\t"))
       of "vcf":
         result.add(x.csq_string)
