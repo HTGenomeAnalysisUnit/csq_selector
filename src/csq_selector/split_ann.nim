@@ -145,7 +145,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int])
         var tags: HashSet[string]
         
         var csq_classes_config = %* {}
-        if config.tagging_config.hasKey("csq_tags"): csq_classes_config = config.tagging_config["csq_tags"]
+        if config.tagging_config.hasKey("csq_classes"): csq_classes_config = config.tagging_config["csq_classes"]
         if not csq_classes_config.hasKey(impact): continue
 
         let csq_classes_impact = csq_classes_config[impact]
@@ -155,46 +155,47 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int])
         if csq_classes_impact.hasKey("scoring"): scoring_config = csq_classes_impact["scoring"]
         
         if tagging_config.len > 0:
-          let tag = tagging_config["tag"].getStr()
-          if tagging_config.hasKey("csq_field"):
-            for k in tagging_config["csq_field"].keys:
-              let field_name = tagging_config["csq_field"][k].getStr()
-              let tag_obj = tagging_config["csq_field"][k]
-              if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
-                let field_value = toks[field_indexes.columns[field_name]].parseFloat()
-                let score_threshold = tag_obj["value"].getFloat()
-                if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
-                  tags.incl(tag)
-              elif tag_obj["value"].kind == JString:
-                let field_value = toks[field_indexes.columns[field_name]]
-                let flag_value = tag_obj["value"].getStr()
-                if field_value == flag_value:
-                  tags.incl(tag)
-              elif tag_obj["value"].kind == JBool:
-                let field_value = toks[field_indexes.columns[field_name]]
-                let flag_value = tag_obj["value"].getBool()
-                if (field_value != "") == flag_value:
-                  tags.incl(tag)
+          for tag_config in tagging_config.items:
+            let tag = tag_config["tag"].getStr()
+            if tag_config.hasKey("csq_field"):
+              for k in tag_config["csq_field"].keys:
+                let field_name = tag_config["csq_field"][k].getStr()
+                let tag_obj = tag_config["csq_field"][k]
+                if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
+                  let field_value = toks[field_indexes.columns[field_name]].parseFloat()
+                  let score_threshold = tag_obj["value"].getFloat()
+                  if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
+                    tags.incl(tag)
+                elif tag_obj["value"].kind == JString:
+                  let field_value = toks[field_indexes.columns[field_name]]
+                  let flag_value = tag_obj["value"].getStr()
+                  if field_value == flag_value:
+                    tags.incl(tag)
+                elif tag_obj["value"].kind == JBool:
+                  let field_value = toks[field_indexes.columns[field_name]]
+                  let flag_value = tag_obj["value"].getBool()
+                  if (field_value != "") == flag_value:
+                    tags.incl(tag)
           
-          if tagging_config.hasKey("info"):
-            for k in tagging_config["info"].keys:
-              let tag_obj = tagging_config["csq_field"][k]
-              if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
-                let score_threshold = tag_obj["value"].getFloat()
-                var info_value: seq[float32] 
-                if v.info.get(k, info_value) == Status.OK:
-                  if compare_values(info_value[0], score_threshold, tag_obj{"operator"}.getStr(">")):
+            if tag_config.hasKey("info"):
+              for k in tag_config["info"].keys:
+                let tag_obj = tag_config["csq_field"][k]
+                if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
+                  let score_threshold = tag_obj["value"].getFloat()
+                  var info_value: seq[float32] 
+                  if v.info.get(k, info_value) == Status.OK:
+                    if compare_values(info_value[0], score_threshold, tag_obj{"operator"}.getStr(">")):
+                      tags.incl(tag)
+                elif tag_obj["value"].kind == JString:
+                  let flag_value = tag_obj["value"].getStr()
+                  var info_value: string
+                  if v.info.get(k, info_value) == Status.OK:
+                    if info_value == flag_value:
+                      tags.incl(tag)
+                elif tag_obj["value"].kind == JBool:
+                  let flag_value = tag_obj["value"].getBool()
+                  if v.info.has_flag(k) == flag_value:
                     tags.incl(tag)
-              elif tag_obj["value"].kind == JString:
-                let flag_value = tag_obj["value"].getStr()
-                var info_value: string
-                if v.info.get(k, info_value) == Status.OK:
-                  if info_value == flag_value:
-                    tags.incl(tag)
-              elif tag_obj["value"].kind == JBool:
-                let flag_value = tag_obj["value"].getBool()
-                if v.info.has_flag(k) == flag_value:
-                  tags.incl(tag)
               
         if scoring_config.len > 0:
           if scoring_config.hasKey("csq_field"):

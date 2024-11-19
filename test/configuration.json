@@ -10,22 +10,39 @@
 					"REVEL_score": {
 							"value": 0.5,
 							"operator": ">="
-					},
-					"LCR": {
-						"value": false
 					}
 				}
-			}
+			},
+			"tagging": [
+				{
+					"tag": "LCR",
+					"info": {
+						"LCR": {
+							"value": true
+						}
+					}
+				}
+			]
 		},
 		"stopgain": {
-			"tagging": {
-				"tag": "HC",
-				"csq_field": {
-					"LoF": {
-						"value": "HC"
+			"tagging": [
+				{
+					"tag": "HC",
+					"csq_field": {
+						"LoF": {
+							"value": "HC"
+						}
+					}
+				},
+				{
+					"tag": "MANE",
+					"csq_field": {
+						"MANE_SELECT": {
+							"value": "MANE"
+						}
 					}
 				}
-			}
+			]
 		}
 	}
 }
