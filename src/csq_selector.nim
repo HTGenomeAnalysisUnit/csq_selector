@@ -248,7 +248,9 @@ proc main* () =
         of "tsv":
             var header = TSV_HEADER
             for c in csq_config.csq_output_fields:
-                header &= &"\tCSQ_{c}"  
+                header &= &"\tCSQ_{c}"
+            for c in info_fields:
+                header &= &"\tINFO_{c}"
             if opts.out != "":
                 out_tsv = newFileStream(opts.out, fmWrite)
                 if isNil(out_tsv):
