@@ -15,7 +15,7 @@ import csq_selector/split_ann
 import csq_selector/arg_parse
 
 const VERSION = "0.4"
-const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE"
+const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE\tTAGGED_CSQ"
 
 proc write_new_var(wrt:VCF, v:Variant): bool {.inline.} =
     result = wrt.write_variant(v)

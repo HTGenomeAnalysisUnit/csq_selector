@@ -123,7 +123,6 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
   else:
     let csqs = s.split(',')  
     for csq in csqs:
-      echo csq
       var toks = csq.split('|')
       var tx = toks[field_indexes.transcript]
       tx = tx.cleanTxVersion(config.tx_vers_re)
@@ -162,15 +161,11 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
           
           if tagging_config.len > 0:
             for tag_config in tagging_config.items:
-              echo $tag_config
               let tag = tag_config["tag"].getStr()
-              echo $tag
               if tag_config.hasKey("csq_field"):
                 for k in tag_config["csq_field"].keys:
                   let field_name = k.toUpperAscii
                   let tag_obj = tag_config["csq_field"][k]
-                  echo $field_indexes.columns
-                  echo fmt"field_name: {field_name}, tag_obj: {tag_obj}"
                   if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
                     let field_value = toks[field_indexes.columns[field_name]].parseFloat()
                     let score_threshold = tag_obj["value"].getFloat()
@@ -349,14 +344,20 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
   ## get the gene_names and consequences for each transcript.
   ## Adapt this to be able to output TSV format
 
-  for x in csqs:    
+  for x in csqs:
+    var impact_str = x.impact
+    if x.tag_suffix.len > 0:
+      for t in x.tag_suffix: impact_str.add("-" & t)          
+    if x.scores_suffix > 0:
+      impact_str = fmt"{impact_str}-{x.scores_suffix}"    
     case format:
       of "tsv":
         var line = @[
           x.gene_id,
           x.gene_symbol,
           x.transcript_version,
-          x.impact
+          x.impact,
+          impact_str
         ]
         for c in csq_columns:
           line.add(x.csq_fields.getOrDefault(c, "."))
@@ -364,11 +365,6 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
       of "vcf":
         result.add(x.csq_string)
       of "rarevar_set":
-        var impact_str = x.impact
-        if x.tag_suffix.len > 0:
-          for t in x.tag_suffix: impact_str.add("-" & t)          
-        if x.scores_suffix > 0:
-          impact_str = fmt"{impact_str}-{x.scores_suffix}"
         result.add([x.gene_id, impact_str].join("\t"))
       else:
         raise newException(ValueError, fmt"unknown output format: {format}")
