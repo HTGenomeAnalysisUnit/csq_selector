@@ -365,7 +365,7 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
       of "vcf":
         result.add(x.csq_string)
       of "rarevar_set":
-        result.add([x.gene_id, impact_str].join("\t"))
+        if x.gene_id != "": result.add([x.gene_id, impact_str].join("\t"))
       else:
         raise newException(ValueError, fmt"unknown output format: {format}")
 
@@ -376,6 +376,7 @@ proc update_gene_set*(gene_set: var Table[string, Gene_set], v: Variant, csqs: s
     var_id = $v.ID
   
   for c in csqs:
+    if c.gene_id == "": continue
     var gene_values = gene_set.getOrDefault(c.gene_id)
     gene_values.chrom = $v.CHROM
     if gene_values.position > v.POS or gene_values.position == 0:
