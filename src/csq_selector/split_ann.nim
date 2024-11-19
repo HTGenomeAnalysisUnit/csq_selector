@@ -365,7 +365,9 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
       of "vcf":
         result.add(x.csq_string)
       of "rarevar_set":
-        if x.gene_id != "": result.add([x.gene_id, impact_str].join("\t"))
+        var gene_id = x.gene_id
+        if gene_id == "": gene_id = x.gene_symbol
+        if gene_id != "": result.add([gene_id, impact_str].join("\t"))
       else:
         raise newException(ValueError, fmt"unknown output format: {format}")
 
