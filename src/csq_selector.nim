@@ -211,6 +211,7 @@ proc main* () =
         n = 0
         n_noimpact = 0
         n_nocsqfield = 0
+        unknown_impacts: HashSet[string]
 
     var vcf:VCF
     if not open(vcf, opts.vcf):
@@ -270,14 +271,14 @@ proc main* () =
         var (dolog, log_msg) = progress_counter(n, interval, t0)
         if dolog: log("INFO", log_msg)
         
-        var (csqfield_missing, impacts) = v.split_csqs(csq_config, impact_order)
+        var (csqfield_missing, impacts) = v.split_csqs(csq_config, impact_order, unknown_impacts)
 
-        if opts.keep_old_ann and csqfield_missing == 0 and opts.out_format == "vcf":
+        if opts.keep_old_ann and opts.out_format == "vcf" and not csqfield_missing:
             var old_ann: string
             doAssert v.info.get(opts.csq_field, old_ann) == Status.OK
             doAssert v.info.set("ORIGINAL_ANN", old_ann) == Status.OK
 
-        n_nocsqfield += csqfield_missing
+        n_nocsqfield += (if csqfield_missing: 1 else: 0)
         
         if impacts.len == 0: 
             n_noimpact += 1

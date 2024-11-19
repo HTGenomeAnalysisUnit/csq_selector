@@ -6,10 +6,11 @@ exon_loss
 frameshift
 stop_lost
 start_lost
-transcript_amplification
-gene_fusion
 disruptive_inframe_insertion
 disruptive_inframe_deletion
+LOF_CUTOFF
+transcript_amplification
+gene_fusion
 inframe_insertion
 inframe_deletion
 missense

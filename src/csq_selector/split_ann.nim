@@ -104,7 +104,7 @@ proc get_most_severe*(csqs:seq[Impact], by_gene: bool): seq[Impact] =
     result.add(imp)
 
 #Split consequences from ANN/CSQ/BCSQ and returns a list of csq as Impact object
-proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int]): (int, seq[Impact]) =
+proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int], unknown_impacts: var HashSet[string]): (bool, seq[Impact]) =
   let field_indexes = config.csq_field_idxs
   var max_impact_order = 99
   if config.min_impact != "":
@@ -112,11 +112,11 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int])
   
   var 
     s = ""
-    csqfield_missing = 0
+    csqfield_missing = false
     parsed_impacts: seq[Impact]
   
   if v.info.get(config.csq_field_name, s) != Status.OK: 
-    csqfield_missing = 1
+    csqfield_missing = true
   else:
     let csqs = s.split(',')  
     for csq in csqs:
@@ -136,7 +136,9 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int])
         try:
           val = impact_order[impact]
         except:
-          log("WARNING", fmt"unknown impact '{impact}' from csq '{csq}' please report the variant to the developers")
+          if impact notin unknown_impacts:
+            unknown_impacts.incl(impact)
+            log("WARNING", fmt"unknown impact '{impact}' from csq '{csq}' please report the variant to the developers. This message will only be shown once per unknown impact")
           val = impact_order.getOrDefault("PROTCHANGE_CUTOFF", 1)
 
         if val > max_impact_order: continue
