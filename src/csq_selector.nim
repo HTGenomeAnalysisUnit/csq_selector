@@ -152,8 +152,8 @@ proc main* () =
     # Load tag shema from JSON if provided
     var tag_config_json: JsonNode
     var tag_csq_keys: seq[string]
-    var tag_info_fields: seq[string]
-    var tag_csq_fields: seq[string]
+    var tag_info_fields: HashSet[string]
+    var tag_csq_fields: HashSet[string]
     if opts.var_tagging_json != "":
         if opts.out_format == "vcf":
             log("WARNING", "--scores can only be used with rarevar_set output and will be ignored")
@@ -171,17 +171,17 @@ proc main* () =
                 let scoring_config = (if tag_config_json["csq_classes"][k].hasKey("scoring"): tag_config_json["csq_classes"][k]["scoring"] else: %* {})
                 if scoring_config.hasKey("info"):
                     for s in scoring_config["info"].keys:
-                        tag_info_fields.add(s)
+                        tag_info_fields.incl(s)
                 if scoring_config.hasKey("csq_field"):
                     for s in scoring_config["csq_field"].keys:
-                        tag_csq_fields.add(s)
+                        tag_csq_fields.incl(s)
                 for t in tagging_config.items:
                     if t.hasKey("info"):
                         for s in t["info"].keys:
-                            tag_info_fields.add(s)
+                            tag_info_fields.incl(s)
                     if t.hasKey("csq_field"):
                         for s in t["csq_field"].keys:
-                            tag_csq_fields.add(s)
+                            tag_csq_fields.incl(s)
             log("INFO", fmt"Loaded scores for {$tag_csq_keys} consequences")
             log("INFO", fmt"Looking for the following fields from INFO {$tag_info_fields}")
             log("INFO", fmt"Looking for the following fields from CSQ field {$tag_csq_fields}")
