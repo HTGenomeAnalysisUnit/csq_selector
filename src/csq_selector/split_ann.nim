@@ -52,6 +52,9 @@ type Gene_set* = object
   position: int64
   vars: seq[string]
 
+proc `$`*(x: CsqFieldIndexes): string =
+  result = fmt"[gene_id: {x.gene_id}, gene_symbol: {x.gene_symbol}, consequence: {x.consequence}, transcript: {x.transcript}, columns: {x.columns}]"
+
 proc `$`*(x: Impact): string =
   result = fmt"[gene_id: {x.gene_id}, gene_symbol: {x.gene_symbol}, transcript: {x.transcript}, impact: {x.impact}, order: {x.order}]"
 
@@ -115,11 +118,13 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
     csqfield_missing = false
     parsed_impacts: seq[Impact]
   
+  echo fmt"Splitting csq from {config.csq_field_name}"
   if v.info.get(config.csq_field_name, s) != Status.OK: 
     csqfield_missing = true
   else:
     let csqs = s.split(',')  
     for csq in csqs:
+      echo csq
       var toks = csq.split('|')
       var tx = toks[field_indexes.transcript]
       tx = tx.cleanTxVersion(config.tx_vers_re)
