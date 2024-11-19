@@ -24,7 +24,7 @@
 				}
 			]
 		},
-		"stopgain": {
+		"stop_gained": {
 			"tagging": [
 				{
 					"tag": "HC",
@@ -35,10 +35,10 @@
 					}
 				},
 				{
-					"tag": "MANE",
+					"tag": "canonical",
 					"csq_field": {
-						"MANE_SELECT": {
-							"value": "MANE"
+						"CANONICAL": {
+							"value": "YES"
 						}
 					}
 				}
