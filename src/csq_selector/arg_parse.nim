@@ -66,4 +66,4 @@ proc logArgs*(opts: ref) {.discardable.} =
         active_filters.add("min_impact")
         log("ARG", fmt"Min impact: {opts.min_impact}")
     log("ARG", fmt"Active filters: {active_filters}")
-    log("ARG", fmt"Tagging congiguration: {opts.var_tagging_json}")
+    log("ARG", fmt"Tagging configuration: {opts.var_tagging_json}")

@@ -135,12 +135,14 @@ proc main* () =
         if opts.exp_data == "":
             log("FATAL", "--min_exp requires --exp_data to be set")
             quit "", QuitFailure
-        if not fileExists(opts.exp_data):
-            log("FATAL", "--exp_data file does not exist")
-            quit "", QuitFailure
         if tissues.len == 0:
             log("FATAL", "No tissues can be loaded from file/list specified by --tissues")
             quit "", QuitFailure
+        log("INFO", fmt"Loading expression data from {opts.exp_data}")
+        if not fileExists(opts.exp_data):
+            log("FATAL", "--exp_data file does not exist")
+            quit "", QuitFailure
+
         ranked_exp = read_exp(opts.exp_data,0,1,2,tissues, min_exp, TX_VERS_RE)
         if ranked_exp.len == 0:
             log("FATAL", fmt"No transcripts ranked above the minimum expression threshold ({min_exp})")
@@ -155,8 +157,10 @@ proc main* () =
         if opts.out_format == "vcf":
             log("WARNING", "--scores can only be used with rarevar_set output and will be ignored")
         else:
+            log("INFO", fmt"Loading tagging schema from {opts.var_tagging_json}")
             tag_config_json = parseFile(opts.var_tagging_json)
             for k in tag_config_json["csq_classes"].keys:
+                echo k
                 tag_csq_keys.add(k)
                 let tagging_config = (if tag_config_json["csq_classes"][k].hasKey("tagging"): tag_config_json["csq_classes"][k]["tagging"] else: %* {})
                 let scoring_config = (if tag_config_json["csq_classes"][k].hasKey("scoring"): tag_config_json["csq_classes"][k]["scoring"] else: %* {})
@@ -166,12 +170,13 @@ proc main* () =
                 if scoring_config.hasKey("csq_field"):
                     for s in scoring_config["csq_field"].keys:
                         tag_csq_fields.add(s)
-                if tagging_config.hasKey("info"):
-                    for s in tagging_config["info"].keys:
-                        tag_info_fields.add(s)
-                if tagging_config.hasKey("csq_field"):
-                    for s in tagging_config["csq_field"].keys:
-                        tag_csq_fields.add(s)
+                for t in tagging_config.items:
+                    if t.hasKey("info"):
+                        for s in t["info"].keys:
+                            tag_info_fields.add(s)
+                    if t.hasKey("csq_field"):
+                        for s in t["csq_field"].keys:
+                            tag_csq_fields.add(s)
             log("INFO", fmt"Loaded scores for {$tag_csq_keys} consequences")
             log("INFO", fmt"Looking for the following fields from INFO {$tag_info_fields}")
             log("INFO", fmt"Looking for the following fields from CSQ field {$tag_csq_fields}")
