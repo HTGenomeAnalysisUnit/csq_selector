@@ -275,7 +275,7 @@ proc main* () =
 
         if opts.keep_old_ann and opts.out_format == "vcf" and not csqfield_missing:
             var old_ann: string
-            doAssert v.info.get(opts.csq_field, old_ann) == Status.OK
+            doAssert v.info.get(csq_config.csq_field_name, old_ann) == Status.OK
             doAssert v.info.set("ORIGINAL_ANN", old_ann) == Status.OK
 
         n_nocsqfield += (if csqfield_missing: 1 else: 0)
@@ -288,10 +288,10 @@ proc main* () =
         if opts.out_format == "vcf":
             if selected_csqs.len > 0:
                 var new_ann = selected_csqs.join(",")
-                doAssert v.info.set(opts.csq_field, new_ann) == Status.OK
+                doAssert v.info.set(csq_config.csq_field_name, new_ann) == Status.OK
             else:
-                if csqfield_missing == 0:
-                    doAssert v.info.delete(opts.csq_field) == Status.OK
+                if not csqfield_missing:
+                    doAssert v.info.delete(csq_config.csq_field_name) == Status.OK
             if opts.out != "":
                 if out_vcf.write_new_var(v): written_vars += 1
             else:
