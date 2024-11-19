@@ -85,6 +85,7 @@ proc main* () =
         csq_columns = (if opts.csq_column != "": opts.csq_column.split(",") else: @[])
         info_fields = (if opts.info_column != "": opts.info_column.split(",") else: @[])
         most_severe = opts.most_severe
+        rarevar_set_geneid = opts.gene_rarevar_identified
 
     #Check at least one filter is active for VCF output
     if not (most_severe or opts.transcripts != "" or opts.min_impact != "" or opts.min_exp != ""):
@@ -288,7 +289,7 @@ proc main* () =
         if impacts.len == 0: 
             n_noimpact += 1
 
-        let selected_csqs = impacts.get_csq_string(csq_config.csq_output_fields, opts.out_format)
+        let selected_csqs = impacts.get_csq_string(csq_config.csq_output_fields, opts.out_format, rarevar_set_geneid)
 
         if opts.out_format == "vcf":
             if selected_csqs.len > 0:

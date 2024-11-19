@@ -8,6 +8,7 @@ var p = newParser("CSQ Selector"):
     option("-o", "--out", help="Output file")
     option("-O", "--out_format", help="Output format", default = some("vcf"), choices = @["vcf", "tsv", "rarevar_set"])
     option("-c", "--csq_field", help="INFO field containing the gene name and impact. Usually CSQ, ANN or BCSQ", default = some("ANN"))
+    option("-g", "--gene_rarevar_identified", help="Set which gene identifier to use when building rarevar_set output", default = some("gene_id"), choices = @["gene_id", "gene_symbol"])
     option("--csq_column", help="CSQ sub-field(s) to extract (in addition to gene, impact, transcript) when output is TSV. A comma-separated list of sub-fields can be provided")
     option("--info_column", help="INFO field(s) to include in the TSV output. A comma-separated list can be provided")    
     option("-e", "--exp_data", help="path to expression file. Tab-separated table of transcript expression across conditions")
@@ -67,3 +68,6 @@ proc logArgs*(opts: ref) {.discardable.} =
         log("ARG", fmt"Min impact: {opts.min_impact}")
     log("ARG", fmt"Active filters: {active_filters}")
     log("ARG", fmt"Tagging configuration: {opts.var_tagging_json}")
+    if opts.use_vcf_id:
+        log("ARG", "Use VCF ID as variant ID in rarevar_set output")
+    log("ARG", fmt"Gene identifier for rarevar_set: {opts.gene_rarevar_identified}")

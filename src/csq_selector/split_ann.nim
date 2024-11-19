@@ -340,7 +340,7 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, csq_columns: seq[string]= @[]):
   result = (csq_field, field_indexes)
 
 #Create csq output strings according to format
-proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string): seq[string] =
+proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string, gene_identifier: string): seq[string] =
   ## get the gene_names and consequences for each transcript.
   ## Adapt this to be able to output TSV format
 
@@ -366,7 +366,7 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
         result.add(x.csq_string)
       of "rarevar_set":
         var gene_id = x.gene_id
-        if gene_id == "": gene_id = x.gene_symbol
+        if gene_identifier == "gene_symbol": gene_id = x.gene_symbol
         if gene_id != "": result.add([gene_id, impact_str].join("\t"))
       else:
         raise newException(ValueError, fmt"unknown output format: {format}")
