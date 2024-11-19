@@ -14,7 +14,6 @@ from ./tx_expression import Ranked_exp
 
 #Store indexes for gene annotations in the CSQ field seq
 type CsqFieldIndexes* = object
-  csq_field*: string
   gene_id*: int
   gene_symbol*: int
   consequence*: int
@@ -256,13 +255,14 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int])
   result = (csqfield_missing, parsed_impacts)
 
 #Read header and set CSQ indexes for relevant fields
-proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var CsqFieldIndexes, csq_columns: seq[string]= @[]): seq[string] {.discardable.} =
-  gene_fields.gene_id = -1
-  gene_fields.gene_symbol = -1
-  gene_fields.csq_field = field
-  gene_fields.consequence = -1
-  gene_fields.transcript = -1
-  gene_fields.columns = newOrderedTable[string, int]()
+proc set_csq_fields_idx*(ivcf:VCF, field:string, csq_columns: seq[string]= @[]): (string, CsqFieldIndexes) =
+  var field_indexes: CsqFieldIndexes
+  var csq_field: string
+  field_indexes.gene_id = -1
+  field_indexes.gene_symbol = -1
+  field_indexes.consequence = -1
+  field_indexes.transcript = -1
+  field_indexes.columns = newOrderedTable[string, int]()
 
   # try to get the requested field, but iterate through other known csq fields
   # as a backup. sometimes, snpEff, for example will not add it's ANN or EFF
@@ -271,11 +271,13 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var CsqFieldIndexe
   for tryfield in [field, "CSQ", "BCSQ", "ANN"]:
     try:
       desc = ivcf.header.get(tryfield, BCF_HEADER_TYPE.BCF_HL_INFO)["Description"]
+      log("INFO", fmt"Reading gene consequences from {field}")
+      csq_field = tryfield
       break
     except:
       if tryfield == field:
         log("WARNING", fmt"Didn't find {field} in header in {ivcf.fname} trying other fields")
-
+  
   if desc == "":
     raise newException(KeyError, fmt"consequence field: {field} not found in header")
   # snpEff ##INFO=<ID=ANN,Number=.,Type=String,Description="Functional annotations: 'Allele | Annotation | Annotation_Impact | Gene_Name | Gene_ID | Feature_Type | Feature_ID | Transcript_BioType | Rank | HGVS.c | HGVS.p | cDNA.pos / cDNA.length | CDS.pos / CDS.length | AA.pos / AA.length | Distance | ERRORS / WARNINGS / INFO' ">
@@ -292,8 +294,7 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var CsqFieldIndexe
 
   for v in adesc.mitems: v = v.toUpperAscii.strip()
   for (i, v) in adesc.pairs:
-    gene_fields.columns[v] = i
-  result = adesc
+    field_indexes.columns[v] = i
 
   # check if all requested columns are present
   for cq in csq_columns:
@@ -305,27 +306,29 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, gene_fields: var CsqFieldIndexe
   #BCSQ: symbol=GENE, id=N/A, transcript=TRANSCRIPT, csq=CONSEQUENCE
   #CSQ: symbol=SYMBOL, id=GENE, transcript=FEATURE, csq=CONSEQUENCE
   for check in ["GENE_ID", "GENE"]:
-    gene_fields.gene_id = adesc.find(check)
-    if gene_fields.gene_id != -1: break
+    field_indexes.gene_id = adesc.find(check)
+    if field_indexes.gene_id != -1: break
   for check in ["SYMBOL", "GENE", "GENE_NAME"]:
-    gene_fields.gene_symbol = adesc.find(check)
-    if gene_fields.gene_symbol != -1: break
+    field_indexes.gene_symbol = adesc.find(check)
+    if field_indexes.gene_symbol != -1: break
   for check in ["CONSEQUENCE", "ANNOTATION"]:
-    gene_fields.consequence = adesc.find(check)
-    if gene_fields.consequence != -1: break
+    field_indexes.consequence = adesc.find(check)
+    if field_indexes.consequence != -1: break
   for check in ["FEATURE", "TRANSCRIPT", "FEATURE_ID"]:
-    gene_fields.transcript = adesc.find(check)
-    if gene_fields.transcript != -1: break
+    field_indexes.transcript = adesc.find(check)
+    if field_indexes.transcript != -1: break
 
-  if gene_fields.gene_id == -1:
+  if field_indexes.gene_id == -1:
     log("FATAL", fmt"unable to find gene id field in {field}")    
     quit "", QuitFailure
-  if gene_fields.consequence == -1:
+  if field_indexes.consequence == -1:
     log("FATAL", fmt"unable to find consequence field in {field}")
     quit "", QuitFailure
-  if gene_fields.transcript == -1:
+  if field_indexes.transcript == -1:
     log("FATAL", fmt"unable to find transcript field in {field}")
     quit "", QuitFailure
+
+  result = (csq_field, field_indexes)
 
 #Create csq output strings according to format
 proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string): seq[string] =

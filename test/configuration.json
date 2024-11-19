@@ -24,12 +24,6 @@
 					"LoF": {
 						"value": "HC"
 					}
-				},
-				"info" : {
-					"AF": {
-						"value": 0.01,
-						"operator": "<"
-					}
 				}
 			}
 		}

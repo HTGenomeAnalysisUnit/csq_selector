@@ -213,8 +213,10 @@ proc main* () =
         quit "", QuitFailure
 
     # Get GeneIndex from header
-    vcf.set_csq_fields_idx(opts.csq_field, csq_config.csq_field_idxs, csq_columns)
-
+    let (csq_field, csq_fields_idx) = vcf.set_csq_fields_idx(opts.csq_field, csq_columns)
+    csq_config.csq_field_idxs = csq_fields_idx
+    csq_config.csq_field_name = csq_field
+    
     # If we have scores are set, check they are defined in the header
     var desc: string
     for s in tag_info_fields:
