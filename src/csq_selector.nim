@@ -220,6 +220,7 @@ proc main* () =
 
     # Get GeneIndex from header
     let (csq_field, csq_fields_idx) = vcf.set_csq_fields_idx(opts.csq_field, csq_columns)
+    log("INFO", fmt"Reading gene consequences from {csq_field}")
     csq_config.csq_field_idxs = csq_fields_idx
     csq_config.csq_field_name = csq_field
     
@@ -282,9 +283,16 @@ proc main* () =
         
         if impacts.len == 0: 
             n_noimpact += 1
-    
+
+        var debug_string: string
+        if v.info.get(csq_config.csq_field_name, debug_string) == Status.OK: 
+            echo debug_string
+        else:
+            echo "No CSQ field"
+        echo fmt"{impacts.len} impacts"
         let selected_csqs = impacts.get_csq_string(csq_config.csq_output_fields, opts.out_format)
-        
+        echo fmt"{selected_csqs.len} impact strings"
+
         if opts.out_format == "vcf":
             if selected_csqs.len > 0:
                 var new_ann = selected_csqs.join(",")

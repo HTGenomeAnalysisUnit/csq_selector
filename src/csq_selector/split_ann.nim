@@ -274,7 +274,6 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, csq_columns: seq[string]= @[]):
   for tryfield in [field, "CSQ", "BCSQ", "ANN"]:
     try:
       desc = ivcf.header.get(tryfield, BCF_HEADER_TYPE.BCF_HL_INFO)["Description"]
-      log("INFO", fmt"Reading gene consequences from {field}")
       csq_field = tryfield
       break
     except:
