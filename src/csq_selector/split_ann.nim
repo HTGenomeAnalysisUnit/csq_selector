@@ -18,7 +18,7 @@ type CsqFieldIndexes* = object
   gene_symbol*: int
   consequence*: int
   transcript*: int
-  columns*: OrderedTableRef[string, int]
+  columns*: OrderedTable[string, int]
 
 # Store configuration to parse and filter csqs
 type Config* = object
@@ -43,7 +43,7 @@ type Impact* = object
   impact: string
   order: int
   csq_string: string
-  csq_fields: TableRef[string, string]
+  csq_fields: Table[string, string]
   tag_suffix: HashSet[string]
   scores_suffix: int
 
@@ -118,7 +118,6 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
     csqfield_missing = false
     parsed_impacts: seq[Impact]
   
-  echo fmt"Splitting csq from {config.csq_field_name}"
   if v.info.get(config.csq_field_name, s) != Status.OK: 
     csqfield_missing = true
   else:
@@ -153,112 +152,121 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
         
         var csq_classes_config = %* {}
         if config.tagging_config.hasKey("csq_classes"): csq_classes_config = config.tagging_config["csq_classes"]
-        if not csq_classes_config.hasKey(impact): continue
-
-        let csq_classes_impact = csq_classes_config[impact]
-        var tagging_config = %* {}
-        var scoring_config = %* {}
-        if csq_classes_impact.hasKey("tagging"): tagging_config = csq_classes_impact["tagging"]
-        if csq_classes_impact.hasKey("scoring"): scoring_config = csq_classes_impact["scoring"]
         
-        if tagging_config.len > 0:
-          for tag_config in tagging_config.items:
-            let tag = tag_config["tag"].getStr()
-            if tag_config.hasKey("csq_field"):
-              for k in tag_config["csq_field"].keys:
-                let field_name = tag_config["csq_field"][k].getStr()
-                let tag_obj = tag_config["csq_field"][k]
+        if csq_classes_config.hasKey(impact): 
+          let csq_classes_impact = csq_classes_config[impact]
+          var tagging_config = %* {}
+          var scoring_config = %* {}
+          if csq_classes_impact.hasKey("tagging"): tagging_config = csq_classes_impact["tagging"]
+          if csq_classes_impact.hasKey("scoring"): scoring_config = csq_classes_impact["scoring"]
+          
+          if tagging_config.len > 0:
+            for tag_config in tagging_config.items:
+              echo $tag_config
+              let tag = tag_config["tag"].getStr()
+              echo $tag
+              if tag_config.hasKey("csq_field"):
+                for k in tag_config["csq_field"].keys:
+                  let field_name = k.toUpperAscii
+                  let tag_obj = tag_config["csq_field"][k]
+                  echo $field_indexes.columns
+                  echo fmt"field_name: {field_name}, tag_obj: {tag_obj}"
+                  if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
+                    let field_value = toks[field_indexes.columns[field_name]].parseFloat()
+                    let score_threshold = tag_obj["value"].getFloat()
+                    if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
+                      tags.incl(tag)
+                  elif tag_obj["value"].kind == JString:
+                    let field_value = toks[field_indexes.columns[field_name]]
+                    let flag_value = tag_obj["value"].getStr()
+                    if field_value == flag_value:
+                      tags.incl(tag)
+                  elif tag_obj["value"].kind == JBool:
+                    let field_value = toks[field_indexes.columns[field_name]]
+                    let flag_value = tag_obj["value"].getBool()
+                    if (field_value != "") == flag_value:
+                      tags.incl(tag)
+            
+              if tag_config.hasKey("info"):
+                for k in tag_config["info"].keys:
+                  let tag_obj = tag_config["info"][k]
+                  if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
+                    let score_threshold = tag_obj["value"].getFloat()
+                    var info_value: seq[float32] 
+                    if v.info.get(k, info_value) == Status.OK:
+                      if compare_values(info_value[0], score_threshold, tag_obj{"operator"}.getStr(">")):
+                        tags.incl(tag)
+                  elif tag_obj["value"].kind == JString:
+                    let flag_value = tag_obj["value"].getStr()
+                    var info_value: string
+                    if v.info.get(k, info_value) == Status.OK:
+                      if info_value == flag_value:
+                        tags.incl(tag)
+                  elif tag_obj["value"].kind == JBool:
+                    let flag_value = tag_obj["value"].getBool()
+                    if v.info.has_flag(k) == flag_value:
+                      tags.incl(tag)
+                
+          if scoring_config.len > 0:
+            if scoring_config.hasKey("csq_field"):
+              for k in scoring_config["csq_field"].keys:
+                let field_name = scoring_config["csq_field"][k].getStr()
+                let tag_obj = scoring_config["csq_field"][k]
                 if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
                   let field_value = toks[field_indexes.columns[field_name]].parseFloat()
                   let score_threshold = tag_obj["value"].getFloat()
                   if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
-                    tags.incl(tag)
+                    scoring += 1
                 elif tag_obj["value"].kind == JString:
                   let field_value = toks[field_indexes.columns[field_name]]
                   let flag_value = tag_obj["value"].getStr()
                   if field_value == flag_value:
-                    tags.incl(tag)
+                    scoring += 1
                 elif tag_obj["value"].kind == JBool:
                   let field_value = toks[field_indexes.columns[field_name]]
                   let flag_value = tag_obj["value"].getBool()
                   if (field_value != "") == flag_value:
-                    tags.incl(tag)
-          
-            if tag_config.hasKey("info"):
-              for k in tag_config["info"].keys:
-                let tag_obj = tag_config["info"][k]
+                    scoring += 1
+            
+            if scoring_config.hasKey("info"):
+              for k in scoring_config["info"].keys:
+                let tag_obj = scoring_config["info"][k]
                 if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
                   let score_threshold = tag_obj["value"].getFloat()
                   var info_value: seq[float32] 
                   if v.info.get(k, info_value) == Status.OK:
                     if compare_values(info_value[0], score_threshold, tag_obj{"operator"}.getStr(">")):
-                      tags.incl(tag)
+                      scoring += 1
                 elif tag_obj["value"].kind == JString:
                   let flag_value = tag_obj["value"].getStr()
                   var info_value: string
                   if v.info.get(k, info_value) == Status.OK:
                     if info_value == flag_value:
-                      tags.incl(tag)
+                      scoring += 1
                 elif tag_obj["value"].kind == JBool:
                   let flag_value = tag_obj["value"].getBool()
                   if v.info.has_flag(k) == flag_value:
-                    tags.incl(tag)
-              
-        if scoring_config.len > 0:
-          if scoring_config.hasKey("csq_field"):
-            for k in scoring_config["csq_field"].keys:
-              let field_name = scoring_config["csq_field"][k].getStr()
-              let tag_obj = scoring_config["csq_field"][k]
-              if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
-                let field_value = toks[field_indexes.columns[field_name]].parseFloat()
-                let score_threshold = tag_obj["value"].getFloat()
-                if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
-                  scoring += 1
-              elif tag_obj["value"].kind == JString:
-                let field_value = toks[field_indexes.columns[field_name]]
-                let flag_value = tag_obj["value"].getStr()
-                if field_value == flag_value:
-                  scoring += 1
-              elif tag_obj["value"].kind == JBool:
-                let field_value = toks[field_indexes.columns[field_name]]
-                let flag_value = tag_obj["value"].getBool()
-                if (field_value != "") == flag_value:
-                  scoring += 1
-          
-          if scoring_config.hasKey("info"):
-            for k in scoring_config["info"].keys:
-              let tag_obj = scoring_config["info"][k]
-              if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
-                let score_threshold = tag_obj["value"].getFloat()
-                var info_value: seq[float32] 
-                if v.info.get(k, info_value) == Status.OK:
-                  if compare_values(info_value[0], score_threshold, tag_obj{"operator"}.getStr(">")):
                     scoring += 1
-              elif tag_obj["value"].kind == JString:
-                let flag_value = tag_obj["value"].getStr()
-                var info_value: string
-                if v.info.get(k, info_value) == Status.OK:
-                  if info_value == flag_value:
-                    scoring += 1
-              elif tag_obj["value"].kind == JBool:
-                let flag_value = tag_obj["value"].getBool()
-                if v.info.has_flag(k) == flag_value:
-                  scoring += 1
 
-        x.gene_id = toks[config.csq_field_idxs.gene_id].cleanTxVersion(config.tx_vers_re)
-        x.gene_symbol = toks[config.csq_field_idxs.gene_symbol]
+        x.gene_id = toks[field_indexes.gene_id].cleanTxVersion(config.tx_vers_re)
+        x.gene_symbol = toks[field_indexes.gene_symbol]
         x.transcript = tx
-        x.transcript_version = toks[config.csq_field_idxs.transcript]
+        x.transcript_version = toks[field_indexes.transcript]
         x.impact = impact
         x.order = val
         x.csq_string = csq
         x.tag_suffix = tags
         x.scores_suffix = scoring
         
+        var csq_table: Table[string, string]
+        for (k, v) in field_indexes.columns.pairs:
+          csq_table[k] = toks[v]
+        x.csq_fields = csq_table
+
         parsed_impacts.add(x)
 
-        if config.most_severe:
-          parsed_impacts = get_most_severe(parsed_impacts, config.group_by_gene)
+    if config.most_severe:
+      parsed_impacts = get_most_severe(parsed_impacts, config.group_by_gene)
 
   result = (csqfield_missing, parsed_impacts)
 
@@ -270,7 +278,6 @@ proc set_csq_fields_idx*(ivcf:VCF, field:string, csq_columns: seq[string]= @[]):
   field_indexes.gene_symbol = -1
   field_indexes.consequence = -1
   field_indexes.transcript = -1
-  field_indexes.columns = newOrderedTable[string, int]()
 
   # try to get the requested field, but iterate through other known csq fields
   # as a backup. sometimes, snpEff, for example will not add it's ANN or EFF
@@ -352,7 +359,7 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
           x.impact
         ]
         for c in csq_columns:
-          line.add(x.csq_fields.getOrDefault(c))
+          line.add(x.csq_fields.getOrDefault(c, "."))
         result.add(line.join("\t"))
       of "vcf":
         result.add(x.csq_string)

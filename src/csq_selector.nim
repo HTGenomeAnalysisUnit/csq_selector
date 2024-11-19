@@ -159,8 +159,12 @@ proc main* () =
         else:
             log("INFO", fmt"Loading tagging schema from {opts.var_tagging_json}")
             tag_config_json = parseFile(opts.var_tagging_json)
-            for k in tag_config_json["csq_classes"].keys:
-                echo k
+            for impact in tag_config_json["csq_classes"].keys:
+                var k = impact.toLowerAscii
+                if k.endsWith("_variant"):
+                    k = k[0..k.high - 8]
+                    tag_config_json[k] = tag_config_json["csq_classes"][impact]
+                    tag_config_json["csq_classes"].delete(impact)
                 tag_csq_keys.add(k)
                 let tagging_config = (if tag_config_json["csq_classes"][k].hasKey("tagging"): tag_config_json["csq_classes"][k]["tagging"] else: %* {})
                 let scoring_config = (if tag_config_json["csq_classes"][k].hasKey("scoring"): tag_config_json["csq_classes"][k]["scoring"] else: %* {})
@@ -221,7 +225,6 @@ proc main* () =
     # Get GeneIndex from header
     let (csq_field, csq_fields_idx) = vcf.set_csq_fields_idx(opts.csq_field, csq_columns)
     log("INFO", fmt"Reading gene consequences from {csq_field}")
-    echo $csq_fields_idx
     csq_config.csq_field_idxs = csq_fields_idx
     csq_config.csq_field_name = csq_field
     
@@ -285,14 +288,7 @@ proc main* () =
         if impacts.len == 0: 
             n_noimpact += 1
 
-        # var debug_string: string
-        # if v.info.get(csq_config.csq_field_name, debug_string) == Status.OK: 
-        #     echo debug_string
-        # else:
-        #     echo "No CSQ field"
-        echo fmt"{impacts.len} impacts"
         let selected_csqs = impacts.get_csq_string(csq_config.csq_output_fields, opts.out_format)
-        echo fmt"{selected_csqs.len} impact strings"
 
         if opts.out_format == "vcf":
             if selected_csqs.len > 0:
