@@ -181,7 +181,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
           
             if tag_config.hasKey("info"):
               for k in tag_config["info"].keys:
-                let tag_obj = tag_config["csq_field"][k]
+                let tag_obj = tag_config["info"][k]
                 if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
                   let score_threshold = tag_obj["value"].getFloat()
                   var info_value: seq[float32] 
@@ -222,7 +222,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
           
           if scoring_config.hasKey("info"):
             for k in scoring_config["info"].keys:
-              let tag_obj = scoring_config["csq_field"][k]
+              let tag_obj = scoring_config["info"][k]
               if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
                 let score_threshold = tag_obj["value"].getFloat()
                 var info_value: seq[float32] 
