@@ -15,7 +15,7 @@ import csq_selector/split_ann
 import csq_selector/arg_parse
 
 const VERSION = "0.4"
-const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE\tTAGGED_CSQ"
+const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE\tTAGGED_CSQ\tRENAMED_TAGGED_CSQ"
 
 proc write_new_var(wrt:VCF, v:Variant): bool {.inline.} =
     result = wrt.write_variant(v)
@@ -151,6 +151,7 @@ proc main* () =
 
     # Load tag shema from JSON if provided
     var tag_config_json: JsonNode
+    var rename_dict: Table[string,string]
     var tag_csq_keys: seq[string]
     var tag_info_fields: HashSet[string]
     var tag_csq_fields: HashSet[string]
@@ -160,6 +161,17 @@ proc main* () =
         else:
             log("INFO", fmt"Loading tagging schema from {opts.var_tagging_json}")
             tag_config_json = parseFile(opts.var_tagging_json)
+
+            # Check for renaming of consequences
+            if tag_config_json.hasKey("rename"):
+                for new_name, csq_list in tag_config_json["rename"].pairs:
+                    for c in csq_list:
+                        if rename_dict.hasKey(c.getStr):
+                            log("FATAL", fmt"Consequence {c.getStr} is already being renamed to {rename_dict[c.getStr]}")
+                            quit "", QuitFailure
+                        rename_dict[c.getStr] = new_name
+                log("INFO", fmt"Found a renaming schema for {rename_dict.len} consequences")
+
             for impact in tag_config_json["csq_classes"].keys:
                 var k = impact.toLowerAscii
                 if k.endsWith("_variant"):
@@ -198,6 +210,7 @@ proc main* () =
     csq_config.tagging_config = tag_config_json
     csq_config.csq_output_fields = csq_columns
     csq_config.tx_vers_re = TX_VERS_RE
+    csq_config.rename_schema = rename_dict
 
     # Set output streams
     var out_vcf:VCF

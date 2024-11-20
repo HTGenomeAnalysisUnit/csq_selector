@@ -33,6 +33,7 @@ type Config* = object
   tagging_config*: JsonNode
   csq_output_fields*: seq[string]
   tx_vers_re*: Regex
+  rename_schema*: Table[string, string]
 
 #Store impact information
 type Impact* = object
@@ -46,6 +47,7 @@ type Impact* = object
   csq_fields: Table[string, string]
   tag_suffix: HashSet[string]
   scores_suffix: int
+  renamed_csq: string
 
 type Gene_set* = object 
   chrom: string
@@ -242,7 +244,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
                   let flag_value = tag_obj["value"].getBool()
                   if v.info.has_flag(k) == flag_value:
                     scoring += 1
-
+        
         x.gene_id = toks[field_indexes.gene_id].cleanTxVersion(config.tx_vers_re)
         x.gene_symbol = toks[field_indexes.gene_symbol]
         x.transcript = tx
@@ -252,6 +254,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
         x.csq_string = csq
         x.tag_suffix = tags
         x.scores_suffix = scoring
+        x.renamed_csq = config.rename_schema.getOrDefault(impact, impact)
         
         var csq_table: Table[string, string]
         for (k, v) in field_indexes.columns.pairs:
@@ -346,10 +349,14 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
 
   for x in csqs:
     var impact_str = x.impact
+    var renamed_str = x.renamed_csq
     if x.tag_suffix.len > 0:
-      for t in x.tag_suffix: impact_str.add("-" & t)          
+      for t in x.tag_suffix: 
+        impact_str.add("-" & t)
+        renamed_str.add("-" & t)          
     if x.scores_suffix > 0:
-      impact_str = fmt"{impact_str}-{x.scores_suffix}"    
+      impact_str = fmt"{impact_str}-{x.scores_suffix}"
+      renamed_str = fmt"{renamed_str}-{x.scores_suffix}"    
     case format:
       of "tsv":
         var line = @[
@@ -357,7 +364,8 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
           x.gene_symbol,
           x.transcript_version,
           x.impact,
-          impact_str
+          impact_str,
+          renamed_str
         ]
         for c in csq_columns:
           line.add(x.csq_fields.getOrDefault(c, "."))
@@ -367,7 +375,7 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
       of "rarevar_set":
         var gene_id = x.gene_id
         if gene_identifier == "gene_symbol": gene_id = x.gene_symbol
-        if gene_id != "": result.add([gene_id, impact_str].join("\t"))
+        if gene_id != "": result.add([gene_id, renamed_str].join("\t"))
       else:
         raise newException(ValueError, fmt"unknown output format: {format}")
 
