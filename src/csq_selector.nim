@@ -166,10 +166,13 @@ proc main* () =
             if tag_config_json.hasKey("rename"):
                 for new_name, csq_list in tag_config_json["rename"].pairs:
                     for c in csq_list:
-                        if rename_dict.hasKey(c.getStr):
-                            log("FATAL", fmt"Consequence {c.getStr} is already being renamed to {rename_dict[c.getStr]}")
+                        var impact = c.getStr
+                        if impact.endsWith("_variant"):
+                            impact = impact[0..impact.high - 8]
+                        if rename_dict.hasKey(impact):
+                            log("FATAL", fmt"Consequence {impact} is already being renamed to {rename_dict[impact]}")
                             quit "", QuitFailure
-                        rename_dict[c.getStr] = new_name
+                        rename_dict[impact] = new_name
                 log("INFO", fmt"Found a renaming schema for {rename_dict.len} consequences")
 
             for impact in tag_config_json["csq_classes"].keys:

@@ -154,8 +154,8 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
         var csq_classes_config = %* {}
         if config.tagging_config.hasKey("csq_classes"): csq_classes_config = config.tagging_config["csq_classes"]
         
-        if csq_classes_config.hasKey(impact): 
-          let csq_classes_impact = csq_classes_config[impact]
+        if csq_classes_config.hasKey(impact) or csq_classes_config.hasKey(fmt"{impact}_variant"): 
+          let csq_classes_impact = csq_classes_config[(if csq_classes_config.hasKey(impact): impact else: fmt"{impact}_variant")]
           var tagging_config = %* {}
           var scoring_config = %* {}
           if csq_classes_impact.hasKey("tagging"): tagging_config = csq_classes_impact["tagging"]

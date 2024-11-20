@@ -47,6 +47,18 @@
 					}
 				}
 			]
+		},
+		"splice_acceptor_variant": {
+			"tagging": [
+				{
+					"tag": "HC",
+					"csq_field": {
+						"LoF": {
+							"value": "HC"
+						}
+					}
+				}
+			]
 		}
 	}
 }
