@@ -1,5 +1,5 @@
 {
-	"rename": {
+	"aliases": {
 		"LoF": ["stop_lost","stop_gained","frameshift_variant","splice_acceptor_variant","splice_donor_variant","start_lost"],
 		"greendb_regulatory": ["enhancer", "promoter", "silencer", "insulator", "bivalent"]
 	},

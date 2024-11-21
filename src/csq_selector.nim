@@ -163,8 +163,8 @@ proc main* () =
             tag_config_json = parseFile(opts.var_tagging_json)
 
             # Check for renaming of consequences
-            if tag_config_json.hasKey("rename"):
-                for new_name, csq_list in tag_config_json["rename"].pairs:
+            if tag_config_json.hasKey("aliases"):
+                for new_name, csq_list in tag_config_json["aliases"].pairs:
                     for c in csq_list:
                         var impact = c.getStr
                         if impact.endsWith("_variant"):
@@ -179,7 +179,7 @@ proc main* () =
                 var k = impact.toLowerAscii
                 if k.endsWith("_variant"):
                     k = k[0..k.high - 8]
-                    tag_config_json[k] = tag_config_json["csq_classes"][impact]
+                    tag_config_json["csq_classes"][k] = tag_config_json["csq_classes"][impact]
                     tag_config_json["csq_classes"].delete(impact)
                 tag_csq_keys.add(k)
                 let tagging_config = (if tag_config_json["csq_classes"][k].hasKey("tagging"): tag_config_json["csq_classes"][k]["tagging"] else: %* {})
