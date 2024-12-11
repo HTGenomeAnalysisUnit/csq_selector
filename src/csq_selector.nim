@@ -26,9 +26,15 @@ proc var2string(v:Variant, csq: string, info_fields: seq[string]): string {.inli
 
     var outline = @[ $v.CHROM, $v.POS, $v.ID, v.REF, alts.join(","), v.FILTER, csq ]
     var info_string: string
+    var info_float: seq[float32]
+    var info_int: seq[int32]
     for x in info_fields:
         if v.info.get(x, info_string) == Status.OK:
             outline.add(info_string)
+        elif v.info.get(x, info_float) == Status.OK:
+            outline.add($info_float[0])
+        elif v.info.get(x, info_int) == Status.OK:
+            outline.add($info_int[0])
         else:
             outline.add(".")
     result = outline.join("\t")
@@ -249,6 +255,13 @@ proc main* () =
     # If we have scores are set, check they are defined in the header
     var desc: string
     for s in tag_info_fields:
+        try:
+            desc = vcf.header.get(s, BCF_HEADER_TYPE.BCF_HL_INFO)["Description"]
+        except:
+            log("FATAL", fmt"Could not find {s} in VCF header")
+            quit "", QuitFailure
+
+    for s in info_fields:
         try:
             desc = vcf.header.get(s, BCF_HEADER_TYPE.BCF_HL_INFO)["Description"]
         except:

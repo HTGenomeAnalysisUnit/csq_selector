@@ -361,7 +361,7 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
       of "tsv":
         var line = @[
           x.gene_id,
-          x.gene_symbol,
+          (if x.gene_symbol != "": x.gene_symbol else: "."),
           x.transcript_version,
           x.impact,
           impact_str,
