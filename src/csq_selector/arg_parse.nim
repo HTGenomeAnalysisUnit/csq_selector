@@ -23,6 +23,7 @@ var p = newParser("CSQ Selector"):
     option("--impact_order", help="ordering of impacts to override the default. See default using show_csq_order")
     option("-j", "--var_tagging_json", help="A JSON file describing schema for variant tagging")
     flag("--use_vcf_id", help="Use the ID field from the VCF as the variant ID in the rarevar_set output")
+    flag("--filter", help="Only output variants where there is at least one consequence after filtering")
         
 proc parseCmdLine*(): ref =
     try:
@@ -70,4 +71,6 @@ proc logArgs*(opts: ref) {.discardable.} =
     log("ARG", fmt"Tagging configuration: {opts.var_tagging_json}")
     if opts.use_vcf_id:
         log("ARG", "Use VCF ID as variant ID in rarevar_set output")
+    if opts.filter:
+        log("ARG", "Filter out variants with no consequences")
     log("ARG", fmt"Gene identifier for rarevar_set: {opts.gene_rarevar_identified}")
