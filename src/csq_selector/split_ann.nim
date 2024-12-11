@@ -263,7 +263,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
 
         parsed_impacts.add(x)
 
-    if config.most_severe:
+    if parsed_impacts.len > 0 and config.most_severe:
       parsed_impacts = get_most_severe(parsed_impacts, config.group_by_gene)
 
   result = (csqfield_missing, parsed_impacts)

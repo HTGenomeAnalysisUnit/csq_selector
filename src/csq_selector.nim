@@ -150,7 +150,7 @@ proc main* () =
             log("FATAL", fmt"No transcripts ranked above the minimum expression threshold ({min_exp})")
             quit "", QuitFailure
 
-    # Load tag shema from JSON if provided
+    # Load tag schema from JSON if provided
     var tag_config_json: JsonNode
     var rename_dict: Table[string,string]
     var tag_csq_keys: seq[string]
@@ -158,7 +158,7 @@ proc main* () =
     var tag_csq_fields: HashSet[string]
     if opts.var_tagging_json != "":
         if opts.out_format == "vcf":
-            log("WARNING", "--scores can only be used with rarevar_set output and will be ignored")
+            log("WARNING", "--var_tagging_json can only be used with rarevar_set output and will be ignored")
         else:
             log("INFO", fmt"Loading tagging schema from {opts.var_tagging_json}")
             tag_config_json = parseFile(opts.var_tagging_json)
@@ -302,7 +302,7 @@ proc main* () =
             doAssert v.info.set("ORIGINAL_ANN", old_ann) == Status.OK
 
         n_nocsqfield += (if csqfield_missing: 1 else: 0)
-        
+    
         if impacts.len == 0: 
             n_noimpact += 1
             if filter_no_csq: continue
