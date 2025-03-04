@@ -78,7 +78,10 @@ Options:
   -O, --out_format=OUT_FORMAT
                              Output format Possible values: [vcf, tsv, rarevar_set] (default: vcf)
   -c, --csq_field=CSQ_FIELD  INFO field containing the gene name and impact. Usually CSQ, ANN or BCSQ (default: ANN)
-  --csq-column=CSQ_COLUMN    CSQ sub-field(s) to extract (in addition to gene, impact, transcript) when output is TSV. A comma-separated list of sub-fields can be provided
+  -g, --gene_rarevar_identified=GENE_RAREVAR_IDENTIFIED
+                             Set which gene identifier to use when building rarevar_set output Possible values: [gene_id, gene_symbol] (default: gene_id)
+  --csq_column=CSQ_COLUMN    CSQ sub-field(s) to extract (in addition to gene, impact, transcript) when output is TSV. A comma-separated list of sub-fields can be provided
+  --info_column=INFO_COLUMN  INFO field(s) to include in the TSV output. A comma-separated list can be provided
   -e, --exp_data=EXP_DATA    path to expression file. Tab-separated table of transcript expression across conditions
   -n, --min_exp=MIN_EXP      Min expression value for a transcript to be considered expressed
   --tissues=TISSUES          List of tissues to select in the expression file. Comma-separated list or file with 1 tissue per line.
@@ -91,8 +94,10 @@ Options:
   --min_impact=MIN_IMPACT    Impact threshold from the consequences order
   --impact_order=IMPACT_ORDER
                              ordering of impacts to override the default. See default using show_csq_order
-  -s, --scores=SCORES        A JSON file describing scores schema for variant consequences
+  -j, --var_tagging_json=VAR_TAGGING_JSON
+                             A JSON file describing schema for variant tagging
   --use_vcf_id               Use the ID field from the VCF as the variant ID in the rarevar_set output
+  --filter                   Only output variants where there is at least one consequence after filtering
 ```
 
 ### Most severe filter
@@ -123,32 +128,31 @@ Then you can use `--tissues` to specify tissues of interest. Here you can specif
 
 The min expression threshold is set using `--min_exp`. Only consequences affecting a transcript with expression above this threshold in at least on of the specified tissues are kept.
 
-### Use scores for rarevar_set output
+### Refine variant consequence names
 
-When the output format is set to `rarevar_set` it is possible to configure value thresholds based on annotations in the INFO field to refine variants categories. You can pass a JSON file to the `--scores` option to configure value thresholds to be applied for a specific impact and the variant annotation for that impact will reflect the number of scores thresholds that are passed. For example instead of just `missense`, the annotation could be `missense-1` or `missense-2` if the variant has a score above threshold for one or two values, respectively.
+When the output format is set to `rarevar_set` or `tsv` it is possible to configure value thresholds based on annotations in the INFO fields and in consequence blocks to refine variants categories. You can pass a JSON file to the `-j, --var_tagging_json` option to configure the scoring/tagging strategy.
+
+An example of the JSON file is in `test/configuration.json`
+
+#### Scoring and tagging
+
+Within the `csq_classes` key you can define for each possible consequence (e.g. `missense`) a scoring strategy under the `scoring` key. Here you can define threshold for `info` or `csq_field` fields. Similarly, you can define a tagging strategy under the `tagging` key to add a tag to the variant consequence name when a criteria is met.
+
+For example you can ask to have missense variant scored based on CADD and REVEL annotations so that the variant annotation for that impact will reflect the number of scores thresholds that are passed. For example instead of just `missense`, the annotation could be `missense-1` or `missense-2` if the variant has a score above threshold for one or two values, respectively.
+
+You can also ask to apply a tag `pathogenic` to the consequence name if the variant has a INFO pathogenic flag. In this case the final impact can become `missense-pathogenic-1`, or `missense-pathogenic-2`, combining the scoring and tagging strategies.
 
 At the moment, this functionality only works with numeric or flag annotations. For numeric annotation, it is possible to configure a threashold value and the requested comparison (`>, >=, <, <=, ==, !=`).
 
-An example of the JSON file is:
+#### Aliasing
+
+Under the `aliases` key you can define aliases for given impacts so that they are all renamed to a single name. This is useful when you want to group together different impacts under a single name. For example, you can group all coding impacts or all loss-of-function ones.
 
 ```json
-{
-  "impact": {
-    "score_name": {
-      "value": 10,
-      "operator": ">="
-    },
-    "flag_name": {
-      "value": true
-    }
-  }
+"aliases": {
+		"LoF": ["stop_lost","stop_gained","frameshift_variant","splice_acceptor_variant","splice_donor_variant","start_lost"]
 }
 ```
-
-- `impact` is the consequence for which scoring schema will be applied (like missense) and must match what exepected in the impact order
-- `score_name` / `flag_name` is the name of the numeric / flag annotation to be considered. This must match the name of the INFO field in the VCF file
-- `value` is the numeric threshold value or true/false for flag annotation
-- `operator` is the operator to be used to compare the value in the VCF file with the threshold (any of `>, >=, <, <=, ==, !=`). This is relevant only for numeric annotations.
 
 ## Output formats
 
