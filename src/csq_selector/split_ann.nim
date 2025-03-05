@@ -123,7 +123,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
   if v.info.get(config.csq_field_name, s) != Status.OK: 
     csqfield_missing = true
   else:
-    let csqs = s.split(',')  
+    let csqs = s.split(',')
     for csq in csqs:
       var toks = csq.split('|')
       var tx = toks[field_indexes.transcript]
@@ -153,7 +153,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
         
         var csq_classes_config = %* {}
         if config.tagging_config.hasKey("csq_classes"): csq_classes_config = config.tagging_config["csq_classes"]
-        
+
         if csq_classes_config.hasKey(impact): 
           let csq_classes_impact = csq_classes_config[impact]
           var tagging_config = %* {}

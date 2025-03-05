@@ -14,7 +14,7 @@ import csq_selector/tx_expression
 import csq_selector/split_ann
 import csq_selector/arg_parse
 
-const VERSION = "0.4"
+const VERSION = "0.4.1"
 const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE\tTAGGED_CSQ\tRENAMED_TAGGED_CSQ"
 
 proc write_new_var(wrt:VCF, v:Variant): bool {.inline.} =
@@ -207,7 +207,10 @@ proc main* () =
             log("INFO", fmt"Loaded scores for {$tag_csq_keys} consequences")
             log("INFO", fmt"Looking for the following fields from INFO {$tag_info_fields}")
             log("INFO", fmt"Looking for the following fields from CSQ field {$tag_csq_fields}")
-    
+    else:
+        log("INFO", "No tagging schema provided")
+        tag_config_json = %* {}
+
     # Set CSQ config
     var csq_config: Config
     csq_config.csq_field_name = opts.csq_field
