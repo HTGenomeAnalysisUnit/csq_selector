@@ -207,7 +207,7 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
           if scoring_config.len > 0:
             if scoring_config.hasKey("csq_field"):
               for k in scoring_config["csq_field"].keys:
-                let field_name = scoring_config["csq_field"][k].getStr()
+                let field_name = k.toUpperAscii
                 let tag_obj = scoring_config["csq_field"][k]
                 if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
                   let field_value = toks[field_indexes.columns[field_name]].parseFloat()
