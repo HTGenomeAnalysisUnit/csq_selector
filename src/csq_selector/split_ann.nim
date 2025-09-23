@@ -169,7 +169,12 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
                   let field_name = k.toUpperAscii
                   let tag_obj = tag_config["csq_field"][k]
                   if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
-                    let field_value = toks[field_indexes.columns[field_name]].parseFloat()
+                    var field_value: float 
+                    try:
+                      field_value = toks[field_indexes.columns[field_name]].parseFloat()
+                    except:
+                      log("WARNING", fmt"Could not parse {field_name} value: '{toks[field_indexes.columns[field_name]]}' to float in variant {$v.CHROM}:{$v.POS}:{v.REF}>{v.ALT[0]} for tagging with '{tag}'")
+                      continue
                     let score_threshold = tag_obj["value"].getFloat()
                     if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
                       tags.incl(tag)
@@ -210,7 +215,12 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
                 let field_name = k.toUpperAscii
                 let tag_obj = scoring_config["csq_field"][k]
                 if tag_obj["value"].kind == JFloat or tag_obj["value"].kind == JInt:
-                  let field_value = toks[field_indexes.columns[field_name]].parseFloat()
+                  var field_value: float 
+                  try:
+                    field_value = toks[field_indexes.columns[field_name]].parseFloat()
+                  except:
+                    log("WARNING", fmt"Could not parse {field_name} value: '{toks[field_indexes.columns[field_name]]}' to float in variant {$v.CHROM}:{$v.POS}:{v.REF}>{v.ALT[0]}")
+                    continue
                   let score_threshold = tag_obj["value"].getFloat()
                   if compare_values(field_value, score_threshold, tag_obj{"operator"}.getStr(">")):
                     scoring += 1
