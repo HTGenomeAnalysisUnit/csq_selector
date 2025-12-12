@@ -7,6 +7,7 @@ import os
 import streams
 import re
 import json
+import sequtils
 import std/sets
 import csq_selector/impact_order
 import csq_selector/utils
@@ -14,7 +15,7 @@ import csq_selector/tx_expression
 import csq_selector/split_ann
 import csq_selector/arg_parse
 
-const VERSION = "0.4.2"
+const VERSION = "0.4.3"
 const TSV_HEADER = "#CHROM\tPOS\tID\tREF\tALT\tFILTER\tGENE_ID\tGENE_SYMBOL\tTRANSCRIPT\tCONSEQUENCE\tTAGGED_CSQ\tRENAMED_TAGGED_CSQ"
 
 proc write_new_var(wrt:VCF, v:Variant): bool {.inline.} =
@@ -221,7 +222,8 @@ proc main* () =
     #csq_config.most_expressed: bool # not implemented yet
     csq_config.group_by_gene = by_gene
     csq_config.tagging_config = tag_config_json
-    csq_config.csq_output_fields = csq_columns
+    # Make csq columns all to uppercase for consistency
+    csq_config.csq_output_fields = csq_columns.map(proc(x: string): string = x.toUpperAscii)
     csq_config.tx_vers_re = TX_VERS_RE
     csq_config.rename_schema = rename_dict
 
