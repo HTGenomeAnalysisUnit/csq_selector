@@ -110,6 +110,7 @@ proc get_most_severe*(csqs:seq[Impact], by_gene: bool): seq[Impact] =
 
 #Split consequences from ANN/CSQ/BCSQ and returns a list of csq as Impact object
 proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int], unknown_impacts: var HashSet[string]): (bool, seq[Impact]) =
+  log("DEBUG", fmt"Processing variant {v.CHROM}:{v.POS}:{v.REF}>{v.ALT[0]} for csq splitting")
   let field_indexes = config.csq_field_idxs
   var max_impact_order = 99
   if config.min_impact != "":
@@ -271,6 +272,8 @@ proc split_csqs*(v:Variant, config: Config, impact_order: TableRef[string, int],
           csq_table[k] = toks[v]
         x.csq_fields = csq_table
 
+        log("DEBUG", fmt"Parsed impact: {$x}")
+        log("DEBUG", fmt"CSQ fields: {x.csq_fields}")
         parsed_impacts.add(x)
 
     if parsed_impacts.len > 0 and config.most_severe:
@@ -358,6 +361,7 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
   ## Adapt this to be able to output TSV format
 
   for x in csqs:
+    log("DEBUG", fmt"Generating output for impact: {x}")
     var impact_str = x.impact
     var renamed_str = x.renamed_csq
     if x.tag_suffix.len > 0:
@@ -377,8 +381,11 @@ proc get_csq_string*(csqs: seq[Impact], csq_columns: seq[string], format: string
           impact_str,
           renamed_str
         ]
+        log("DEBUG", fmt"Main line before adding extra columns: {line}")
         for c in csq_columns:
-          line.add(x.csq_fields.getOrDefault(c, "."))
+          let column_value = x.csq_fields.getOrDefault(c, ".")
+          log("DEBUG", fmt"Adding column {c} with value '{column_value}'")
+          line.add(column_value)
         result.add(line.join("\t"))
       of "vcf":
         result.add(x.csq_string)
